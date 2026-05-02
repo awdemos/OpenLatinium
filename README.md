@@ -1,195 +1,141 @@
-# **Latinium Programming Language**
+# Latinium Compiler
 
+## Overview
 
-```Latinium``` is a small programming language designed to run on a Virtual Machine. The Virtual Machine executable is located in ```vm/```. This programming language was built using the library [ply](www.dabeaz.com/ply/). 
+```Latinium``` is a small programming language compiler built using the [PLY](www.dabeaz.com/ply/) library. It compiles `.lat` source files to stack-based bytecode for execution on the EWVM (Easy Virtual Machine).
 
-**Note**: The Virtual Machine was developed by students at the University of Minho, Portugal.I did not develop the Virtual Machine, I only developed the programming language. To learn more about the Virtual Machine, please refer to the zip file ```vms-vf.zip``` in the ```vm/``` directory. Also note that I made some modifications to the Virtual Machine in order to make it compatible with the Virtual Machine at [EWVM](https://ewvm.epl.di.uminho.pt/). Those modifications include:
-- Adding a new instructions to the Virtual Machine (```AND```, ```OR```).
-- Improving the memory consumption of the Virtual Machine by reducing the number of memory leaks.
+## Installation
 
-## **Installation**
+### Local Install
 
-Installing through pip:
-
-```rustonsole
-git clone https://github.com/fabiocfabini/Latinium.git
+```bash
+git clone https://github.com/awdemos/Latinium.git
 cd Latinium
-make install
 pip install -e .
 ```
 
-**Note**: Only works on linux.
+### Docker (Recommended)
 
-## **Quick Start**
-
-```rustonsole
-lat run examples/hello_world.Latinium
+```bash
+docker build -t latinium .
+docker run --rm -v $(pwd):/app latinium build examples/hello_world.lat
 ```
 
-## **Features**
+## Quick Start
 
-### **Comments**
+```bash
+lat build examples/hello_world.lat
+```
 
-To add one line comments, simply type ```//``` followed by the comment. For example:
+## Features
 
+### Comments
+
+Single-line comments with `//`:
 ```rust
 // This is a comment
 ```
 
-Multiline comments can be added by typing ```/*``` followed by the comment and ```*/``` at the end. For example:
-
+Multiline comments with `/* */`:
 ```rust
 /*
 This is a multiline comment
 */
 ```
 
-### **Data Types**
+### Data Types
 
-Has of now, the language supports the following data types:
+- `integer`, `float`, `filum`: Basic types
+- `&integer`, `&float`, `&filum`: Pointer types
+- `vec<integer>`, `vec<float>`, `vec<filum>`: Array types
 
-- ```integer```, ```float```, ```filum```: These are the basic data types of the language;
-- ```&integer```, ```&float```, ```&filum```: These are the pointer data types of the language;
-- vec```<integer>```, vec```<float>```, vec```<filum>```: These are the vector data types of the language;
+### Arithmetics
 
-### **Arithmetics**
+- `+`, `-`, `*`, `/` operators
+- `==`, `!=`, `<`, `>`, `<=`, `>=` operators
+- `et`, `aut` (logical AND, OR)
+- `non` (logical NOT)
 
-Basic arithmetics are supported by the language. These include:
+Pointer arithmetic:
+- `+` adds an integer to a pointer
+- `-` subtracts an integer from a pointer
+- `>`, `<`, `>=`, `<=` compare two pointers
 
-- the ```+```, ```-```, ```*```, ```/``` operators;
-- the ```==```, ```!=```, ```<```, ```>```, ```<=```, ```>=``` operators;
-- the ```et```, ```aut``` operators;
-- the ```non``` operator;
+### Variables
 
-Latinium also supports pointer arithmetics. The following operations are supported:
-
-- ```+``` adds an integer to a pointer;
-- ```-``` subtracts an integer from a pointer and returns the difference between two pointers;
-- ```>```, ```<```, ```>=```, ```<=``` compares two pointers;
-
-### **Variables**
-
-To declare a variable, simply type the variable name followed by ```:``` and the variable type. For example:
-
-```rust
-a: integer
-```
-
-Variables declared in this way are initialized with the value ```0```. To declare a variable and initialize it with a value, simply type the variable name followed by ```:``` and the variable type followed by ```=``` and the value. For example:
-
+Declare and initialize:
 ```rust
 a: integer = 10
 ```
 
-To modify the value of a variable, simply type the variable name followed by ```=``` and the value. For example:
+Declare only (initialized to 0):
+```rust
+a: integer
+```
 
+Reassign:
 ```rust
 a = 20
 ```
 
-### **Arrays**
-
-In Latinium arrays are declared in 3 different ways:
-
-- Declaring an array of a specific size. This will initialize the array with the value ```0```;
+### Arrays
 
 ```rust
-a: vec<integer>[10]
+a: vec<integer>[10]        // Size-based declaration
+a: vec<integer> = [10, 20, 30]  // List initialization
+a: vec<integer> = [1 ... 10]    // Range initialization
 ```
 
-- Declaring an array through a list of values;
-
-```rust
-a: vec<integer> = [10, 20, 30, 40, 50]
-```
-
-- Declaring an array with the ```...``` operator;
-
-```rust
-a: vec<integer> = [1 ... 10]
-```
-
-This will initialize the array with the values ```1, 2, 3, 4, 5, 6, 7, 8, 9, 10```.
-
-To access an array element, simply type the array name followed by ```[``` and the index of the element followed by ```]```. For example:
-
+Access:
 ```rust
 a[0]
 ```
 
+### Control Flow
 
-### **Control Flow**
-
-The control flow of the language is similar to the control flow of C. These include:
-
-- ```si```, ```si aliter``` and ```si aliter si``` statements;
-
+`si` (if):
 ```rust
 si expression {
-    // code
-}
-
-// or
-
-si expression {
-    // code
-} aliter {
-    // code
-}
-
-// or
-
-si expression {
-    // code
-} aliter si expression {
     // code
 } aliter {
     // code
 }
 ```
 
-- ```par``` statements;
-
+`par` (switch):
 ```rust
 par expression {
     expression -> {
         // code
     }
-    ...
     default -> {
         // code
     }
 }
 ```
 
-- ```dum``` statements;
-
+`dum` (while):
 ```rust
 dum expression {
     // code
 }
 ```
 
-- ```facio dum``` statements;
-
+`facio dum` (do-while):
 ```rust
 facio {
     // code
 } dum(expression)
 ```
 
-- ```enim``` statements;
-
+`enim` (for):
 ```rust
 enim(i: integer = 0; i < 10; i = i + 1) {
     // code
 }
 ```
 
-
-### **Functions**
-
-To declare a function start with the key word ```munus``` followed by the function name, the function parameters and the function return type. For example:
+### Functions
 
 ```rust
 munus sum(a: integer, b: integer) -> integer {
@@ -197,8 +143,27 @@ munus sum(a: integer, b: integer) -> integer {
 }
 ```
 
-To call a function, simply type the function name followed by the function parameters. For example:
-
+Call:
 ```rust
 sum(10, 20)
+```
+
+## CLI Usage
+
+```
+lat [MODE] [INPUT] [OPTIONS]
+
+Modes:
+  run       Compile and run the program
+  build     Compile the program to bytecode
+  test      Compile and run test programs
+  euler     Check Euler problem solutions
+  examples  Compile and run example programs
+
+Options:
+  -h, --help      Show help
+  -o, --output    Specify output file
+  -v, --verbose   Show verbose output
+  -rec, --record  Record program outputs
+  -clc, --clean-up  Clean generated files
 ```

@@ -12,7 +12,7 @@ from lat.utils.colors import *
 OptArgs = Dict[str, str]
 ReqArgs = Dict[str, Union[str, bool]]
 possible_exec_modes = ["run", "build", "test", "euler", "examples"]
-possible_opt_args = ["-o", "--output", "-v", "--verbose", "-rec", "--record", "-clc", "--clean-up"]
+possible_opt_args = ["-o", "--output", "-v", "--verbose", "-rec", "--record", "-clc", "--clean-up", "--ast"]
 recognized_args = possible_exec_modes + possible_opt_args
 
 
@@ -24,7 +24,7 @@ def print_help():
     print()
     print(f"{COLOR_BLUE}EXECUTION MODES{RESET_COLOR}:")
     print(f"  {COLOR_GREEN}run{RESET_COLOR}        Compiles and runs the program.")
-    print(f"  {COLOR_GREEN}build{RESET_COLOR}      Compile the program to EWVM.")
+    print(f"  {COLOR_GREEN}build{RESET_COLOR}      Compile the program to bytecode.")
     print(f"  {COLOR_GREEN}euler{RESET_COLOR}      Check the solutions of the Euler problems.")
     print(f"  {COLOR_GREEN}test{RESET_COLOR}       Compile and run the test programs. Compare the outputs with the expected outputs.")
     print(f"  {COLOR_GREEN}examples{RESET_COLOR}   Compile and run the example programs. Compare the outputs with the expected outputs.")
@@ -87,12 +87,13 @@ def prepare_cmd_args() -> Tuple[OptArgs, ReqArgs]:
     output_file = sys.argv[sys.argv.index("-o") + 1] if "-o" in sys.argv else None
     rec = True if "-rec" in sys.argv else False
     clc = True if "-clc" in sys.argv else False
-    verbose = True if "-v" in sys.argv else False  # TODO: Implement verbose output
+    verbose = True if "-v" in sys.argv else False
+    use_ast = True if "--ast" in sys.argv else False
 
     if verbose:
         warn_cmd("Verbose output is not implemented yet.")
 
-    opt_args = {"-o": output_file, "-v": verbose, "-rec": rec, "-clc": clc}
+    opt_args = {"-o": output_file, "-v": verbose, "-rec": rec, "-clc": clc, "--ast": use_ast}
 
     # Handle Required Arguments
     run = True if "run" in sys.argv else False
@@ -125,8 +126,6 @@ def run_execute(req_args: ReqArgs, opt_args: OptArgs):
 
 
 def build_execute(req_args: ReqArgs, opt_args: OptArgs):
-    from lat import parser
-
     if not req_args["input"]:
         error("No input file specified.")
     with open(req_args["input"], "r") as f:
@@ -134,8 +133,17 @@ def build_execute(req_args: ReqArgs, opt_args: OptArgs):
         content = f.read()
         if content.startswith("//SKIP"):
             sys.exit(2)
-        parser.input = content
-        output = parser.parse(content)
+        if opt_args["--ast"]:
+            from lat.parsing.ast_parser import ast_parser
+            from lat.codegen.generator import CodeGenerator
+            ast_parser.input = content
+            program = ast_parser.parse(content)
+            gen = CodeGenerator()
+            output = gen.generate(program)
+        else:
+            from lat import parser
+            parser.input = content
+            output = parser.parse(content)
         if not opt_args["-o"]:
             opt_args["-o"] = os.path.splitext(req_args["input"])[0] + ".vms"
         with open(opt_args["-o"], "w") as f:

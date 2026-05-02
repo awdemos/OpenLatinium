@@ -55,6 +55,8 @@ Types are **plain strings** compared with `==` and `.startswith()`. No type obje
 
 ### 0.4 The Target VM (EWVM)
 
+> **Note**: The VM is no longer shipped as a prebuilt binary in the repository. It is built from source during the Docker image build process using Chainguard's minimal, security-hardened base images. See the `Dockerfile` for details.
+
 Stack-based instruction set. Key instructions:
 
 ```
@@ -828,18 +830,41 @@ Each test compiles a `.lat` file and either:
 ### 6.4 What Is Preserved from Latinium 1.0
 
 - **The language grammar** — `integer`, `float`, `filum`, `vec<>`, functions, pointers, control flow
-- **The target VM** — EWVM bytecode is unchanged
-- **The CLI interface** — `lat compile file.lat -o out.ewvm`
+- **The target VM** — EWVM bytecode format is unchanged; VM is now containerized
+- **The CLI interface** — `lat build file.lat -o out.vms`
 - **Example programs** — `hello_world`, `bsort`, `qsort`, `rule110` all compile identically
 - **The teaching value** — each phase is understandable in isolation
+- **VM source** — Original VM source (`vms-source.zip`) preserved for reproducible builds
 
 ### 6.5 What Is Eliminated
 
+- **Prebuilt VM binary in repo** — VM is now built from source in Docker (Chainguard images)
 - **Parser-action code generation** — parser is pure syntax
 - **String-based type system** — replaced with type objects
 - **Immediate sys.exit(1)** — replaced with error collection
 - **God parser object** — state is encapsulated in phase-specific objects
 - **String concatenation for code** — replaced with IR/data structures
+
+---
+
+### 6.6 Containerization Strategy
+
+The VM has been containerized using **Chainguard** minimal images for security and reproducibility:
+
+| Aspect | Before | After |
+|--------|--------|-------|
+| VM location | `vm/vms` (prebuilt binary in repo) | Built from `vms-source.zip` in Dockerfile |
+| Base image | N/A (host OS) | `cgr.dev/chainguard/python:latest` |
+| Build stage | N/A | `cgr.dev/chainguard/wolfi-base:latest` with gcc/make/flex/bison |
+| Runtime deps | Host-provided glib/readline | Explicitly installed in container |
+| Makefile | `make install` copied VM to `/usr/local/bin` | Removed VM install target |
+| README | Referenced University of Minho VM | Documents Docker workflow |
+
+**Benefits**:
+- **Reproducible builds** — VM is compiled from source every time
+- **Security** — Chainguard images have minimal attack surface, no shell by default
+- **Portability** — Works identically on any Docker host
+- **Clean repo** — No prebuilt binaries checked into git
 
 ---
 

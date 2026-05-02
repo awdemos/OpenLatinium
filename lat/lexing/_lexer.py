@@ -52,7 +52,7 @@ t_LT = r"<"  # Less than
 t_GT = r">"  # Greater than
 
 
-@lex.TOKEN(r"\d+f | \d+\.\d+(f)?")  # Float
+@lex.TOKEN(r"\d+f|\d+\.\d+(f)?")  # Float
 def t_FLOAT(t):
     if t.value[-1] == "f":
         t.value = t.value[:-1]

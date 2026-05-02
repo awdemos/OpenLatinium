@@ -838,7 +838,10 @@ def p_primary_new(p):
 
 
 def p_error(p):
-    syntax_error(p, f"Invalid syntax '{p.value}'")
+    if p is None:
+        sys.stderr.write("Syntax Error: Unexpected end of file\n")
+    else:
+        syntax_error(p, f"Invalid syntax '{p.value}'")
     sys.exit(1)
 
 

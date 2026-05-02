@@ -42,7 +42,11 @@ class IO:
             push_op = std_message(["WRITEF"])
         elif top.startswith("&"):
             compiler_error(p, 2, f"Can't print array. Not implemented yet.")
-            compiler_note("Called from Print._single")
+            compiler_note("Called from IO._multiple")
+            sys.exit(1)
+        else:
+            compiler_error(p, 2, f"Can't print expression of type '{top}'")
+            compiler_note("Called from IO._multiple")
             sys.exit(1)
 
         return p[1] + p[3] + push_op  # Whatever the multiple_prints production returns + the expression + the print operation
@@ -51,7 +55,7 @@ class IO:
         """
         multiple_prints : expression
         """
-        top = p.parser.type_checker.pop()  # Get the top of the stack<<
+        top = p.parser.type_checker.pop()  # Get the top of the stack
         if top == "filum":  # If the top is a filum, print it
             push_op = std_message(["WRITES"])
         elif top == "integer":  # If the top is an expression, print it
@@ -60,7 +64,11 @@ class IO:
             push_op = std_message(["WRITEF"])
         elif top.startswith("&"):
             compiler_error(p, 1, f"Can't print array. Not implemented yet.")
-            compiler_note("Called from Print._single")
+            compiler_note("Called from IO._single")
+            sys.exit(1)
+        else:
+            compiler_error(p, 1, f"Can't print expression of type '{top}'")
+            compiler_note("Called from IO._single")
             sys.exit(1)
         return p[1] + push_op  # Whatever the expression production returns + the print operation
 
@@ -91,6 +99,10 @@ class IO:
         elif p[1][-1] == "s":
             p.parser.type_checker.push("filum")
             push_op = std_message([""])
+        else:
+            compiler_error(p, 1, f"Unknown read type '{p[1]}'")
+            compiler_note("Called from IO._read_type")
+            sys.exit(1)
         return push_op
 
 
@@ -277,7 +289,10 @@ class Declaration:
             return std_message([f"PUSHF 0.0" for i in range(array_size)])
         elif p[3] == "vec<filum>":
             return std_message([f"PUSHS ''" for i in range(array_size)])
-        assert False, "Invalid type in Declaration._array_declaration"
+        else:
+            compiler_error(p, 1, f"Invalid array type '{p[3]}' in declaration")
+            compiler_note("Called from Declaration._array_declaration")
+            sys.exit(1)
 
     def _array_dimension(self, p) -> str:
         """
@@ -736,7 +751,7 @@ class BreakContinue:
         """
         if len(p.parser.current_loops) == 0:
             compiler_error(p, 1, "'break' statement not allowed outside of a loop")
-            compiler_note("Called from BreakContinue._break.")
+            compiler_note("Called from BreakContinue._break")
             sys.exit(1)
 
         return std_message([f"JUMP LOOP{p.parser.loop_count}END"])
@@ -747,11 +762,11 @@ class BreakContinue:
         """
         if len(p.parser.current_loops) == 0:
             compiler_error(p, 1, "'continue' statement not allowed outside of a loop")
-            compiler_note("Called from BreakContinue._break.")
+            compiler_note("Called from BreakContinue._continue.")
             sys.exit(1)
         if p.parser.current_loops[-1] == "DO":
             compiler_error(p, 1, "'continue' statement not allowed inside of do-while loop")
-            compiler_note("Called from BreakContinue._break.")
+            compiler_note("Called from BreakContinue._continue.")
             sys.exit(1)
 
         return std_message([f"JUMP NEXTLOOP{p.parser.loop_count}"])

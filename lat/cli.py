@@ -31,7 +31,7 @@ def print_help():
     print()
     print(f"{COLOR_BLUE}OPTIONS{RESET_COLOR}:")
     print(f"  {COLOR_GREEN}-h{RESET_COLOR}, {COLOR_GREEN}--help{RESET_COLOR}" + " " * 10 + "Show this help message and exit.")
-    print(f"  {COLOR_GREEN}-o{RESET_COLOR}, {COLOR_GREEN}--ouput{RESET_COLOR}" + " " * 9 + "Specify the output file.")
+    print(f"  {COLOR_GREEN}-o{RESET_COLOR}, {COLOR_GREEN}--output{RESET_COLOR}" + " " * 8 + "Specify the output file.")
     print(f"  {COLOR_GREEN}-rec{RESET_COLOR}, {COLOR_GREEN}--record{RESET_COLOR}" + " " * 6 + "Record the output of the executed programs.")
     print(f"  {COLOR_GREEN}-clc{RESET_COLOR}, {COLOR_GREEN}--clean-up{RESET_COLOR}" + " " * 4 + "Clear the output of the executed programs.")
     print(f"  {COLOR_GREEN}-v{RESET_COLOR}, {COLOR_GREEN}--verbose{RESET_COLOR}" + " " * 7 + "Show verbose output.")

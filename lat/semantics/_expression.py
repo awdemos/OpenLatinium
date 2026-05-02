@@ -95,7 +95,7 @@ class Primary:
             sys.exit(1)
         if not id_meta.type.startswith("vec") and not id_meta.type.startswith("&"):
             compiler_error(p, 1, f"Can't index into variable of type '{id_meta.type}'")
-            compiler_note("Called from Assignment._array_index")
+            compiler_note("Called from Primary._indexing")
             sys.exit(1)
         if not id_meta.p_init:
             compiler_error(p, 1, f"Indexing into non initialized pointer '{p[1]}'")

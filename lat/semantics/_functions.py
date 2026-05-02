@@ -115,14 +115,15 @@ class Functions:
         function_call : f_call '(' args ')'
         """
         func = self.get(p[1])
+        current_func_name = p.parser.functions_handler.current_function.name if p.parser.functions_handler.current_function else "global scope"
         if func is None:  # If the function doesn't exist, report an error
             compiler_error(p, 1, f"Function {p[1]} not declared")
-            compiler_note(f"Error on Function '{p.parser.functions_handler.current_function.name}'")
+            compiler_note(f"Error on Function '{current_func_name}'")
             compiler_note("Called from Functions._call")
             sys.exit(1)
         if len(func.input_types) != p.parser.num_args[-1]:  # If the number of arguments doesn't match the number of parameters, report an error
             compiler_error(p, 1, f"Function {p[1]} expects {len(func.input_types)} arguments but got {p.parser.num_args[-1]}")
-            compiler_note(f"Error on Function '{p.parser.functions_handler.current_function.name}'")
+            compiler_note(f"Error on Function '{current_func_name}'")
             compiler_note("Called from Functions._call")
             sys.exit(1)
         if len(func.input_types) > 0 and func.input_types != p.parser.type_checker.stack[-len(func.input_types) :]:

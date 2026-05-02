@@ -39,7 +39,10 @@ def compiler_error(p, n: int, msg: str):
     """
     Report a compiler error.
     """
-    sys.stderr.write(f"{lat.COLOR_RED}Compiler Error:{lat.COLOR_YELLOW}{p.lineno(n)}:{lat.COLOR_GREEN}{find_column_comp(p.parser.input, p, n)}:{lat.RESET_COLOR} {msg}\n")
+    if p is None:
+        sys.stderr.write(f"{lat.COLOR_RED}Compiler Error:{lat.RESET_COLOR} {msg}\n")
+    else:
+        sys.stderr.write(f"{lat.COLOR_RED}Compiler Error:{lat.COLOR_YELLOW}{p.lineno(n)}:{lat.COLOR_GREEN}{find_column_comp(p.parser.input, p, n)}:{lat.RESET_COLOR} {msg}\n")
 
 
 def compiler_warning(p, n: int, msg: str):

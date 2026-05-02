@@ -134,12 +134,10 @@ def build_execute(req_args: ReqArgs, opt_args: OptArgs):
         if content.startswith("//SKIP"):
             sys.exit(2)
         if opt_args["--ast"]:
-            from lat.parsing.ast_parser import ast_parser
-            from lat.codegen.generator import CodeGenerator
-            ast_parser.input = content
-            program = ast_parser.parse(content)
-            gen = CodeGenerator()
-            output = gen.generate(program)
+            from lat.parsing.ast_parser import parse as ast_parse
+            from lat.codegen.generator import generate as ast_generate
+            program = ast_parse(content)
+            output = ast_generate(program)
         else:
             from lat import parser
             parser.input = content

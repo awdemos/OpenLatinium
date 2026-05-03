@@ -250,9 +250,8 @@ class CodeGenerator:
             return f"PUSHFP\nLOAD {var.stack_pos}\n"
     
     def gen_assignment(self, assign: nodes.Assignment) -> str:
-        code = self.gen_expr(assign.value)
-        
         if isinstance(assign.target, nodes.Identifier):
+            code = self.gen_expr(assign.value)
             var = self.current_scope.get(assign.target.name)
             if var is None:
                 compiler_error(None, 1, f"Variable {assign.target.name} not declared")
@@ -260,7 +259,6 @@ class CodeGenerator:
                 sys.exit(1)
             code += self.gen_store(var)
         elif isinstance(assign.target, nodes.ArrayIndex):
-
             var = self.current_scope.get(assign.target.name)
             if var is None:
                 compiler_error(None, 1, f"Variable {assign.target.name} not declared")
@@ -268,11 +266,14 @@ class CodeGenerator:
                 sys.exit(1)
             
             push_op = "PUSHGP" if var.is_global else "PUSHFP"
-            code += f"{push_op}\nPUSHI {var.stack_pos}\nPADD\n"
+            code = f"{push_op}\nPUSHI {var.stack_pos}\nPADD\n"
             for idx in assign.target.indices:
                 code += self.gen_expr(idx)
                 code += "PADD\n"
+            code += self.gen_expr(assign.value)
             code += "STORE 0\n"
+        else:
+            code = self.gen_expr(assign.value)
         
         return code
     
@@ -318,13 +319,27 @@ class CodeGenerator:
         code = self.gen_expr(if_stmt.condition)
         code += f"JZ {else_label}\n"
         
+        then_scope = Scope(parent=self.current_scope)
+        self.current_scope = then_scope
+        prev_frame = self.frame_count
+        
         for stmt in if_stmt.then_body:
             code += self.gen_stmt(stmt)
+        
+        num_popped = self.frame_count - prev_frame
+        if num_popped > 0:
+            code += f"POP {num_popped}\n"
+        self.frame_count = prev_frame
+        self.current_scope = then_scope.parent
         
         code += f"JUMP {end_label}\n"
         code += f"{else_label}:\n"
         
         if if_stmt.else_body:
+            else_scope = Scope(parent=self.current_scope)
+            self.current_scope = else_scope
+            prev_frame = self.frame_count
+            
             if isinstance(if_stmt.else_body, list):
                 for stmt in if_stmt.else_body:
                     code += self.gen_stmt(stmt)
@@ -332,6 +347,12 @@ class CodeGenerator:
                 code += self.gen_if(if_stmt.else_body)
             else:
                 code += self.gen_stmt(if_stmt.else_body)
+            
+            num_popped = self.frame_count - prev_frame
+            if num_popped > 0:
+                code += f"POP {num_popped}\n"
+            self.frame_count = prev_frame
+            self.current_scope = else_scope.parent
         
         code += f"{end_label}:\n"
         return code
@@ -439,13 +460,35 @@ class CodeGenerator:
                 code += self.gen_expr(case.value)
                 code += "EQUAL\n"
                 code += f"JZ {next_case_label}\n"
+                
+                case_scope = Scope(parent=self.current_scope)
+                self.current_scope = case_scope
+                prev_frame = self.frame_count
+                
                 for stmt in case.body:
                     code += self.gen_stmt(stmt)
+                
+                num_popped = self.frame_count - prev_frame
+                if num_popped > 0:
+                    code += f"POP {num_popped}\n"
+                self.frame_count = prev_frame
+                self.current_scope = case_scope.parent
+                
                 code += f"JUMP {end_label}\n"
                 code += f"{next_case_label}:\n"
             elif isinstance(case, nodes.Default):
+                default_scope = Scope(parent=self.current_scope)
+                self.current_scope = default_scope
+                prev_frame = self.frame_count
+                
                 for stmt in case.body:
                     code += self.gen_stmt(stmt)
+                
+                num_popped = self.frame_count - prev_frame
+                if num_popped > 0:
+                    code += f"POP {num_popped}\n"
+                self.frame_count = prev_frame
+                self.current_scope = default_scope.parent
         
         code += f"{end_label}:\n"
         return code

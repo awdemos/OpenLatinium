@@ -12,7 +12,7 @@ from lat.utils.colors import *
 OptArgs = Dict[str, str]
 ReqArgs = Dict[str, Union[str, bool]]
 possible_exec_modes = ["run", "build", "test", "euler", "examples"]
-possible_opt_args = ["-o", "--output", "-v", "--verbose", "-rec", "--record", "-clc", "--clean-up", "--ast"]
+possible_opt_args = ["-o", "--output", "-v", "--verbose", "-rec", "--record", "-clc", "--clean-up", "--ast", "--check"]
 recognized_args = possible_exec_modes + possible_opt_args
 
 
@@ -89,11 +89,12 @@ def prepare_cmd_args() -> Tuple[OptArgs, ReqArgs]:
     clc = True if "-clc" in sys.argv else False
     verbose = True if "-v" in sys.argv else False
     use_ast = True if "--ast" in sys.argv else False
+    check_only = True if "--check" in sys.argv else False
 
     if verbose:
         warn_cmd("Verbose output is not implemented yet.")
 
-    opt_args = {"-o": output_file, "-v": verbose, "-rec": rec, "-clc": clc, "--ast": use_ast}
+    opt_args = {"-o": output_file, "-v": verbose, "-rec": rec, "-clc": clc, "--ast": use_ast, "--check": check_only}
 
     # Handle Required Arguments
     run = True if "run" in sys.argv else False
@@ -135,8 +136,16 @@ def build_execute(req_args: ReqArgs, opt_args: OptArgs):
             sys.exit(2)
         if opt_args["--ast"]:
             from lat.parsing.ast_parser import parse as ast_parse
+            from lat.semantic.analyzer import analyze_program
             from lat.codegen.generator import generate as ast_generate
             program = ast_parse(content)
+            success, errors, warnings = analyze_program(program)
+            if not success:
+                for e in errors:
+                    print(f"{COLOR_RED}[SEMANTIC ERROR]{RESET_COLOR} {e.message}")
+                sys.exit(1)
+            for w in warnings:
+                print(f"{COLOR_YELLOW}[WARNING]{RESET_COLOR} {w.message}")
             output = ast_generate(program)
         else:
             from lat import parser
@@ -146,6 +155,27 @@ def build_execute(req_args: ReqArgs, opt_args: OptArgs):
             opt_args["-o"] = os.path.splitext(req_args["input"])[0] + ".vms"
         with open(opt_args["-o"], "w") as f:
             f.write(output)
+
+
+def check_execute(req_args: ReqArgs, opt_args: OptArgs):
+    if not req_args["input"]:
+        error("No input file specified.")
+    with open(req_args["input"], "r") as f:
+        info_cmd(f"Checking {req_args['input']}", verbose=opt_args["-v"])
+        content = f.read()
+        if content.startswith("//SKIP"):
+            sys.exit(2)
+        from lat.parsing.ast_parser import parse as ast_parse
+        from lat.semantic.analyzer import analyze_program
+        program = ast_parse(content)
+        success, errors, warnings = analyze_program(program)
+        if not success:
+            for e in errors:
+                print(f"{COLOR_RED}[SEMANTIC ERROR]{RESET_COLOR} {e.message}")
+            sys.exit(1)
+        for w in warnings:
+            print(f"{COLOR_YELLOW}[WARNING]{RESET_COLOR} {w.message}")
+        info_cmd("Semantic check passed.", verbose=opt_args["-v"])
 
 
 def test_execute(req_args: ReqArgs, opt_args: OptArgs):
@@ -318,6 +348,9 @@ def examples_execute(req_args: ReqArgs, opt_args: OptArgs):
 
 
 def execute(opt_args: OptArgs, req_args: ReqArgs):
+    if opt_args["--check"]:
+        check_execute(req_args, opt_args)
+        return
     if req_args["run"]:
         run_execute(req_args, opt_args)
     if req_args["build"]:

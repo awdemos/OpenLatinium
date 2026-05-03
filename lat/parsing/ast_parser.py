@@ -130,8 +130,8 @@ def p_stmt(p):
     | return
     | debug
     """
-    if isinstance(p[1], str) and p[1] in ('BREAK', 'CONTINUE'):
-        p[0] = Break() if p[1] == 'BREAK' else Continue()
+    if isinstance(p[1], str) and p[1] in ('confractus', 'pergo'):
+        p[0] = Break() if p[1] == 'confractus' else Continue()
     else:
         p[0] = p[1]
 
@@ -207,29 +207,26 @@ def p_while(p):
 
 def p_if(p):
     """
-    if : IF expression '{' stmts '}' else_if
+    if : IF expression '{' stmts '}'
+    | IF expression '{' stmts '}' ELSE '{' stmts '}'
+    | IF expression '{' stmts '}' ELSE IF expression '{' stmts '}' else_if
     """
-    p[0] = If(condition=p[2], then_body=p[4], else_body=p[5])
+    if len(p) == 6:
+        p[0] = If(condition=p[2], then_body=p[4], else_body=None)
+    elif len(p) == 10:
+        p[0] = If(condition=p[2], then_body=p[4], else_body=p[8])
+    else:
+        p[0] = If(condition=p[2], then_body=p[4], else_body=If(condition=p[7], then_body=p[9], else_body=p[11]))
 
 def p_else_if(p):
     """
-    else_if : ELSE IF expression '{' stmts '}' else_if
-    | else
-    """
-    if len(p) == 8:
-        p[0] = If(condition=p[3], then_body=p[5], else_body=p[7])
-    else:
-        p[0] = p[1]
-
-def p_else(p):
-    """
-    else : ELSE '{' stmts '}'
-    |
+    else_if : ELSE '{' stmts '}'
+    | ELSE IF expression '{' stmts '}' else_if
     """
     if len(p) == 5:
         p[0] = p[3]
     else:
-        p[0] = None
+        p[0] = If(condition=p[3], then_body=p[5], else_body=p[7])
 
 def p_match(p):
     """
@@ -605,7 +602,7 @@ def p_error(p):
         syntax_error(p, f"Invalid syntax '{p.value}'")
     sys.exit(1)
 
-parser = yacc.yacc(start='prog')
+parser = yacc.yacc(start='prog', errorlog=yacc.NullLogger())
 
 def parse(source_code):
     return parser.parse(source_code)

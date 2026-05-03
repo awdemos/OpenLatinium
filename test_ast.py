@@ -5,6 +5,9 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, ".")
+from lat.vm_interpreter import EWVMPyInterpreter
+
 
 def compile_file(filepath: str, ast_flag: bool) -> tuple[bool, str, str]:
     with tempfile.NamedTemporaryFile(mode='w', suffix='.vms', delete=False) as f:
@@ -27,11 +30,17 @@ build_execute(
         return False, out_path, str(e)
 
 
-def run_vm(vms_path: str) -> tuple[bool, str, str]:
-    vm_path = '/tmp/vms/vms/vms'
-    result = subprocess.run([vm_path, vms_path], capture_output=True, text=True)
-    ok = 'ERRO' not in result.stderr and 'Error' not in result.stderr and 'error' not in result.stderr.lower()
-    return ok, result.stdout, result.stderr
+def run_interpreter(vms_path: str) -> tuple[bool, str, str]:
+    try:
+        with open(vms_path) as f:
+            source = f.read()
+        interp = EWVMPyInterpreter()
+        interp.load(source)
+        interp.run()
+        stdout = '\n'.join(interp.output)
+        return True, stdout, ''
+    except Exception as e:
+        return False, '', str(e)
 
 
 def test_file(filepath: str) -> tuple[bool, str]:
@@ -50,8 +59,8 @@ def test_file(filepath: str) -> tuple[bool, str]:
         if not orig_compile_ok and ast_compile_ok:
             return True, "PASS (AST works where original fails)"
         
-        orig_run_ok, orig_stdout, orig_stderr = run_vm(orig_path)
-        ast_run_ok, ast_stdout, ast_stderr = run_vm(ast_path)
+        orig_run_ok, orig_stdout, orig_stderr = run_interpreter(orig_path)
+        ast_run_ok, ast_stdout, ast_stderr = run_interpreter(ast_path)
         
         if not orig_run_ok and not ast_run_ok:
             return True, "PASS (both fail run)"

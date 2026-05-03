@@ -8,6 +8,7 @@ import subprocess
 from tqdm import tqdm
 
 from lat.utils.colors import *
+from lat.vm_interpreter import run_bytecode
 
 OptArgs = Dict[str, str]
 ReqArgs = Dict[str, Union[str, bool]]
@@ -56,6 +57,18 @@ def echo_cmd(cmd: str, verbose: bool = False) -> Tuple[bool, str]:
         elif completed_process.returncode == 2:
             return 2, "The program was skipped."
     return 0, ""
+
+
+def run_vms_py(output_file: str, input_data: str = '', verbose: bool = False) -> Tuple[int, str]:
+    if verbose:
+        print(f"{COLOR_BLUE}[CMD]{RESET_COLOR} python vm {output_file}")
+    try:
+        with open(output_file, 'r') as f:
+            source = f.read()
+        result = run_bytecode(source, input_data)
+        return 0, result
+    except Exception as e:
+        return 1, str(e)
 
 
 def warn_cmd(msg: str, verbose: bool = False):
@@ -123,10 +136,11 @@ def run_execute(req_args: ReqArgs, opt_args: OptArgs):
         opt_args["-o"] = os.path.splitext(req_args["input"])[0] + ".vms"
     build_execute(req_args, opt_args)
     info_cmd(f"Running {opt_args['-o']}", verbose=opt_args.get("-v", False))
-    ret = echo_cmd(f"vms {opt_args['-o']}", verbose=opt_args.get("-v", False))
+    ret = run_vms_py(opt_args['-o'], verbose=opt_args.get("-v", False))
     if ret[0] == 1:
         print(ret[1])
         sys.exit(1)
+    print(ret[1], end='')
 
 
 def build_execute(req_args: ReqArgs, opt_args: OptArgs):
@@ -240,7 +254,10 @@ def test_execute(req_args: ReqArgs, opt_args: OptArgs):
                 num_tests -= 1
                 skipped_tests.append(input_file)
                 continue
-            echo_cmd(f"vms {output_file} > {os.path.splitext(output_file)[0]}.ans", verbose=opt_args.get("-v", False))
+            ret = run_vms_py(output_file, verbose=opt_args.get("-v", False))
+            if ret[0] == 0:
+                with open(os.path.splitext(output_file)[0] + ".ans", 'w') as f:
+                    f.write(ret[1])
     else:
         for input_file, output_file in iterable:
             if opt_args.get("-v", False):
@@ -254,14 +271,14 @@ def test_execute(req_args: ReqArgs, opt_args: OptArgs):
                 num_tests -= 1
                 skipped_tests.append(input_file)
                 continue
-            if input_file.startswith("read"):
-                ret = echo_cmd(f"vms {output_file} < '3.14\n314\n314' > {os.path.splitext(output_file)[0]}_com.out", verbose=opt_args.get("-v", False))
-            else:
-                ret = echo_cmd(f"vms {output_file} > {os.path.splitext(output_file)[0]}_com.out", verbose=opt_args.get("-v", False))
+            input_data = '3.14\n314\n314' if os.path.basename(input_file).startswith("read") else ''
+            ret = run_vms_py(output_file, input_data=input_data, verbose=opt_args.get("-v", False))
             if ret[0] == 1:
                 num_tests -= 1
                 failed_tests.append((input_file, ret[1]))
                 continue
+            with open(os.path.splitext(output_file)[0] + "_com.out", 'w') as f:
+                f.write(ret[1])
             ret = echo_cmd(f"diff {os.path.splitext(output_file)[0]}.ans {os.path.splitext(output_file)[0]}_com.out", verbose=opt_args.get("-v", False))
             if ret[0] != 0:
                 num_tests -= 1
@@ -305,11 +322,13 @@ def euler_execute(req_args: ReqArgs, opt_args: OptArgs):
             num_tests -= 1
             skipped_tests.append(input_file)
             continue
-        ret = echo_cmd(f"vms {output_file} > {os.path.splitext(output_file)[0]}.out", verbose=opt_args.get("-v", False))
+        ret = run_vms_py(output_file, verbose=opt_args.get("-v", False))
         if ret[0] == 1:
             num_tests -= 1
             failed_tests.append((input_file, ret[1]))
             continue
+        with open(os.path.splitext(output_file)[0] + ".out", 'w') as f:
+            f.write(ret[1])
         ret = echo_cmd(f"diff {os.path.splitext(output_file)[0]}.ans {os.path.splitext(output_file)[0]}.out", verbose=opt_args.get("-v", False))
         if ret[0] != 0:
             num_tests -= 1
@@ -350,7 +369,10 @@ def examples_execute(req_args: ReqArgs, opt_args: OptArgs):
                 num_tests -= 1
                 skipped_tests.append(input_file)
                 continue
-            echo_cmd(f"vms {output_file} > {os.path.splitext(output_file)[0]}.ans", verbose=opt_args.get("-v", False))
+            ret = run_vms_py(output_file, verbose=opt_args.get("-v", False))
+            if ret[0] == 0:
+                with open(os.path.splitext(output_file)[0] + ".ans", 'w') as f:
+                    f.write(ret[1])
     else:
         for input_file, output_file in iterable:
             if opt_args.get("-v", False):
@@ -364,11 +386,13 @@ def examples_execute(req_args: ReqArgs, opt_args: OptArgs):
                 num_tests -= 1
                 skipped_tests.append(input_file)
                 continue
-            ret = echo_cmd(f"vms {output_file} > {os.path.splitext(output_file)[0]}.out", verbose=opt_args.get("-v", False))
+            ret = run_vms_py(output_file, verbose=opt_args.get("-v", False))
             if ret[0] == 1:
                 num_tests -= 1
                 failed_tests.append((input_file, ret[1]))
                 continue
+            with open(os.path.splitext(output_file)[0] + ".out", 'w') as f:
+                f.write(ret[1])
             ret = echo_cmd(f"diff {os.path.splitext(output_file)[0]}.ans {os.path.splitext(output_file)[0]}.out", verbose=opt_args.get("-v", False))
             if ret[0] != 0:
                 num_tests -= 1

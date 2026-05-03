@@ -1,16 +1,18 @@
-# Latinium Compiler
+# OpenLatinum
 
 ## Overview
 
-```Latinium``` is a small programming language compiler built using the [PLY](www.dabeaz.com/ply/) library. It compiles `.lat` source files to stack-based bytecode for execution on the EWVM (Easy Virtual Machine).
+OpenLatinum is a statically typed programming language with Latin-inspired syntax. It compiles `.lat` source files to stack-based bytecode. The compiler is written in Python and supports multiple compilation paths for teaching and experimentation.
+
+This project is a community-driven evolution of the original OpenLatinum compiler (University of Minho, 2022).
 
 ## Installation
 
 ### Local Install
 
 ```bash
-git clone https://github.com/awdemos/Latinium.git
-cd Latinium
+git clone https://github.com/awdemos/OpenLatinum.git
+cd OpenLatinum
 pip install -e .
 ```
 

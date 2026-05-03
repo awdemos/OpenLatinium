@@ -13,7 +13,7 @@
 
 ## Introduction
 
-OpenLatinum is a statically typed programming language with Latin-inspired syntax. It compiles to bytecode for a stack-based virtual machine. The compiler is written in Python and supports multiple compilation paths for teaching and experimentation.
+OpenLatinum is a statically typed programming language with Latin-inspired syntax. It compiles to stack-based bytecode. The compiler is written in Python and supports multiple compilation paths for teaching and experimentation.
 
 ### Key Features
 
@@ -30,31 +30,20 @@ OpenLatinum is a statically typed programming language with Latin-inspired synta
 
 - Python 3.8 or later
 - pip
-- gcc, make, flex, bison, glib2-dev, readline-dev (for VM build)
 
 ### Local Installation
 
 ```bash
-git clone https://github.com/awdemos/Latinium.git
-cd Latinium
+git clone https://github.com/awdemos/OpenLatinum.git
+cd OpenLatinum
 pip install -e .
 ```
-
-### Building the VM
-
-```bash
-unzip vms-source.zip -d /tmp/vms
-cd /tmp/vms/vms
-make
-```
-
-The VM binary will be at `/tmp/vms/vms/vms`.
 
 ### Docker Installation
 
 ```bash
-docker build -t latinium .
-docker run --rm -v $(pwd):/app latinium build examples/hello_world.lat
+docker build -t openlatinum .
+docker run --rm -v $(pwd):/app openlatinum build examples/hello_world.lat
 ```
 
 ## Quick Start
@@ -83,7 +72,7 @@ lat build hello.lat -o hello.vms
 
 ### Your First Program
 
-Every Latinium program needs a `main` function as entry point:
+Every OpenLatinum program needs a `main` function as entry point:
 
 ```
 munus main() {
@@ -95,7 +84,7 @@ Save as `hello.lat` and run with `lat run hello.lat`.
 
 ### Variables and Types
 
-Latinium uses ID-first declarations:
+OpenLatinum uses ID-first declarations:
 
 ```
 munus main() {
@@ -450,7 +439,7 @@ lat examples
 ### Project Structure
 
 ```
-Latinium/
+  OpenLatinum/
   lat/
     cli.py              # CLI entry point
     lexing/
@@ -476,7 +465,6 @@ Latinium/
   examples/             # Example programs
   test/                 # Test programs
   apresentacao/         # Tutorial programs
-  vms-source.zip        # VM source code
   Dockerfile
   README.md
   EVOLUTION_ANALYSIS.md # Architecture analysis
@@ -551,31 +539,16 @@ Add a new test:
 2. Create `test/my_feature.ans` with expected output
 3. Run `python test_ast.py` to verify
 
-### Building the VM
-
-The VM must be built before running compiled programs:
-
-```bash
-unzip vms-source.zip -d /tmp/vms
-cd /tmp/vms/vms
-make
-```
-
-Required packages on Fedora/RHEL:
-```bash
-sudo dnf install gcc make flex bison glib2-devel readline-devel
-```
-
 ### Docker Development
 
 Build the image:
 ```bash
-docker build -t latinium .
+docker build -t openlatinum .
 ```
 
 Run with local code:
 ```bash
-docker run --rm -v $(pwd):/app latinium build /app/examples/hello_world.lat
+docker run --rm -v $(pwd):/app openlatinum build /app/examples/hello_world.lat
 ```
 
 ## Examples

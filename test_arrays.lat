@@ -1,0 +1,11 @@
+munus testArrays() {
+    v: vec<integer>[5]
+    v[0] = 10
+    v[1] = 20
+    print(v[0], "\n")
+    print(v[1], "\n")
+}
+
+munus main() {
+    testArrays()
+}

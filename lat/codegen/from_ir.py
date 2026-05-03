@@ -2,7 +2,7 @@ from typing import List, Optional, Dict
 
 from lat.ir.nodes import (
     Alloc, ArrayLoad, ArrayStore, BasicBlock, BinOp, Branch, Call,
-    Const, IRFunction, IRProgram, Jump, Label, Load, Read, Return,
+    Const, IRFunction, IRProgram, Jump, Label, Load, Push, Read, Return,
     Store, Temp, UnaryOp, Var, Write
 )
 from lat.utils.errors import compiler_error
@@ -108,6 +108,8 @@ class IRCodeGenerator:
             self._gen_write(instr)
         elif isinstance(instr, Alloc):
             self._gen_alloc(instr)
+        elif isinstance(instr, Push):
+            self._gen_push(instr)
 
     def _gen_const(self, instr: Const):
         if instr.type == "integer":
@@ -244,6 +246,9 @@ class IRCodeGenerator:
     def _gen_alloc(self, instr: Alloc):
         self._gen_operand(instr.size)
         self.emit("PUSHN 1")
+
+    def _gen_push(self, instr: Push):
+        self._gen_operand(instr.value)
 
     def _gen_operand(self, operand):
         if isinstance(operand, Const):

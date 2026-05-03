@@ -22,6 +22,7 @@ class VarInfo:
     is_global: bool
     is_initialized: bool = True
     array_shape: Optional[List[int]] = None
+    is_const: bool = False
 
 
 @dataclass
@@ -34,8 +35,9 @@ class Scope:
     variables: Dict[str, VarInfo] = field(default_factory=dict)
 
     def define(self, name: str, type: str, is_global: bool = False,
-               is_initialized: bool = True, array_shape: Optional[List[int]] = None) -> None:
-        self.variables[name] = VarInfo(name, type, is_global, is_initialized, array_shape)
+               is_initialized: bool = True, array_shape: Optional[List[int]] = None,
+               is_const: bool = False) -> None:
+        self.variables[name] = VarInfo(name, type, is_global, is_initialized, array_shape, is_const)
 
     def lookup(self, name: str) -> Optional[VarInfo]:
         if name in self.variables:
@@ -177,7 +179,7 @@ class SemanticAnalyzer:
                 self.error(f"Cannot initialize variable of type '{decl_type}' with value of type '{init_type}'")
                 return
 
-        self.scope.define(decl.name, decl_type, is_global=is_global)
+        self.scope.define(decl.name, decl_type, is_global=is_global, is_const=decl.is_const)
 
     def visit_assignment(self, assign: Assignment) -> None:
         value_type = self.visit_expr(assign.value)
@@ -186,6 +188,9 @@ class SemanticAnalyzer:
             var = self.scope.lookup(assign.target.name)
             if var is None:
                 self.error(f"Assignment to undeclared variable '{assign.target.name}'")
+                return
+            if var.is_const:
+                self.error(f"Cannot assign to constant variable '{assign.target.name}'")
                 return
             if var.type.startswith("vec"):
                 self.error("Assignment to array not allowed. Use indexing instead.")
@@ -227,8 +232,8 @@ class SemanticAnalyzer:
 
     def visit_if(self, if_stmt: If) -> None:
         cond_type = self.visit_expr(if_stmt.condition)
-        if cond_type is not None and cond_type != "integer":
-            self.error(f"Condition must be of type 'integer', got '{cond_type}'")
+        if cond_type is not None and cond_type not in ("integer", "boolean"):
+            self.error(f"Condition must be of type 'integer' or 'boolean', got '{cond_type}'")
 
         self.push_scope(name="if")
         for stmt in if_stmt.then_body:
@@ -262,9 +267,10 @@ class SemanticAnalyzer:
                 self.pop_scope()
 
     def visit_while(self, while_stmt: While) -> None:
+        self.push_scope(name="while", in_loop=True)
         cond_type = self.visit_expr(while_stmt.condition)
-        if cond_type is not None and cond_type != "integer":
-            self.error(f"Condition must be of type 'integer', got '{cond_type}'")
+        if cond_type is not None and cond_type not in ("integer", "boolean"):
+            self.error(f"Condition must be of type 'integer' or 'boolean', got '{cond_type}'")
 
         self.push_scope(name="while", in_loop=True)
         for stmt in while_stmt.body:
@@ -278,8 +284,8 @@ class SemanticAnalyzer:
         self.pop_scope()
 
         cond_type = self.visit_expr(dowhile_stmt.condition)
-        if cond_type is not None and cond_type != "integer":
-            self.error(f"Condition must be of type 'integer', got '{cond_type}'")
+        if cond_type is not None and cond_type not in ("integer", "boolean"):
+            self.error(f"Condition must be of type 'integer' or 'boolean', got '{cond_type}'")
 
     def visit_for(self, for_stmt: For) -> None:
         self.push_scope(name="for", in_loop=True)
@@ -292,8 +298,8 @@ class SemanticAnalyzer:
                     self.visit_assignment(init)
 
         cond_type = self.visit_expr(for_stmt.condition)
-        if cond_type is not None and cond_type != "integer":
-            self.error(f"Condition must be of type 'integer', got '{cond_type}'")
+        if cond_type is not None and cond_type not in ("integer", "boolean"):
+            self.error(f"Condition must be of type 'integer' or 'boolean', got '{cond_type}'")
 
         for update in for_stmt.update:
             self.visit_assignment(update)
@@ -338,6 +344,8 @@ class SemanticAnalyzer:
             return "float"
         elif isinstance(expr, StringLiteral):
             return "filum"
+        elif isinstance(expr, BooleanLiteral):
+            return "boolean"
         elif isinstance(expr, Identifier):
             return self.visit_identifier(expr)
         elif isinstance(expr, BinaryOp):
@@ -356,6 +364,8 @@ class SemanticAnalyzer:
             return self.visit_function_call(expr)
         elif isinstance(expr, Read):
             return self.visit_read_expr(expr)
+        elif isinstance(expr, IfExpr):
+            return self.visit_if_expr(expr)
         else:
             self.error(f"Unknown expression type: {type(expr).__name__}")
             return None
@@ -467,6 +477,16 @@ class SemanticAnalyzer:
     def visit_array_range(self, rng: ArrayRange) -> Optional[str]:
         return "vec<integer>"
 
+    def visit_if_expr(self, expr: IfExpr) -> Optional[str]:
+        cond_type = self.visit_expr(expr.condition)
+        if cond_type is not None and cond_type != "boolean":
+            self.error(f"If expression condition must be 'boolean', got '{cond_type}'")
+        then_type = self.visit_expr(expr.then_expr)
+        else_type = self.visit_expr(expr.else_expr)
+        if then_type is not None and else_type is not None and then_type != else_type:
+            self.error(f"If expression branches have different types: '{then_type}' and '{else_type}'")
+        return then_type or else_type
+
     def visit_ref(self, ref: Ref) -> Optional[str]:
         var = self.scope.lookup(ref.name)
         if var is None:
@@ -508,7 +528,7 @@ class SemanticAnalyzer:
         return type_str
 
     def _is_valid_type(self, type_str: str) -> bool:
-        base_types = {"integer", "float", "filum"}
+        base_types = {"integer", "float", "filum", "boolean"}
         if type_str in base_types:
             return True
         if type_str.startswith("&") and type_str[1:] in base_types:

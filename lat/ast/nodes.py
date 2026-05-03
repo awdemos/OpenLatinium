@@ -38,6 +38,11 @@ class StringLiteral:
 
 
 @dataclass
+class BooleanLiteral:
+    value: bool
+
+
+@dataclass
 class Identifier:
     name: str
 
@@ -89,10 +94,17 @@ class Read:
     expressions: List['Expr']
 
 
+@dataclass
+class IfExpr:
+    condition: 'Expr'
+    then_expr: 'Expr'
+    else_expr: 'Expr'
+
+
 Expr = Union[
-    IntegerLiteral, FloatLiteral, StringLiteral, Identifier,
-    BinaryOp, UnaryOp, ArrayIndex, ArrayLiteral, ArrayRange,
-    Ref, FunctionCall, Read
+    IntegerLiteral, FloatLiteral, StringLiteral, BooleanLiteral,
+    Identifier, BinaryOp, UnaryOp, IfExpr, ArrayIndex, ArrayLiteral,
+    ArrayRange, Ref, FunctionCall, Read
 ]
 
 
@@ -101,6 +113,7 @@ class Decl:
     name: str
     type: str
     value: Optional[Expr] = None
+    is_const: bool = False
 
 
 @dataclass

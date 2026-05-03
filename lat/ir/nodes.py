@@ -115,9 +115,14 @@ class Alloc:
     result: Temp
 
 
+@dataclass
+class Push:
+    value: Operand
+
+
 Instruction = Union[
     BinOp, UnaryOp, Load, Store, ArrayLoad, ArrayStore,
-    Call, Return, Jump, Branch, Label, Read, Write, Alloc
+    Call, Return, Jump, Branch, Label, Read, Write, Alloc, Push
 ]
 
 

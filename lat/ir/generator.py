@@ -3,7 +3,7 @@ from typing import List, Optional
 from lat.ast import nodes as ast
 from lat.ir.nodes import (
     Alloc, ArrayLoad, ArrayStore, BasicBlock, BinOp, Branch, Call,
-    Const, IRFunction, IRProgram, Jump, Label, Load, Read, Return,
+    Const, IRFunction, IRProgram, Jump, Label, Load, Push, Read, Return,
     Store, Temp, UnaryOp, Var, Write
 )
 
@@ -24,7 +24,7 @@ class IRGenerator:
 
     def _new_label(self, prefix: str = "L") -> str:
         self.label_count += 1
-        return f"{prefix}{self.label_count}"
+        return f"{prefix.upper()}{self.label_count}"
 
     def _emit(self, instr):
         if self.current_blocks:
@@ -109,8 +109,36 @@ class IRGenerator:
     def _gen_decl(self, decl: ast.Decl):
         self.locals.append(Var(decl.name, decl.type))
         if decl.value is not None:
-            val = self._gen_expr(decl.value)
-            self._emit(Store(decl.name, "local", val))
+            if isinstance(decl.value, ast.IfExpr):
+                cond = self._gen_expr(decl.value.condition)
+                then_label = self._new_label("ifexprthen")
+                else_label = self._new_label("ifexprelse")
+                end_label = self._new_label("ifexprend")
+                self._emit(Branch(cond, then_label, else_label))
+                self._add_block(then_label)
+                then_val = self._gen_expr(decl.value.then_expr)
+                if isinstance(then_val, Const):
+                    self._emit(Push(then_val))
+                self._emit(Jump(end_label))
+                self._add_block(else_label)
+                else_val = self._gen_expr(decl.value.else_expr)
+                if isinstance(else_val, Const):
+                    self._emit(Push(else_val))
+                self._emit(Jump(end_label))
+                self._add_block(end_label)
+            else:
+                val = self._gen_expr(decl.value)
+                if isinstance(val, Const):
+                    self._emit(Push(val))
+        else:
+            if decl.type == "integer" or decl.type == "boolean":
+                self._emit(Push(Const(0, "integer")))
+            elif decl.type == "float":
+                self._emit(Push(Const(0.0, "float")))
+            elif decl.type == "filum":
+                self._emit(Push(Const("", "filum")))
+            else:
+                self._emit(Push(Const(0, "integer")))
 
     def _gen_assignment(self, stmt: ast.Assignment):
         val = self._gen_expr(stmt.value)
@@ -135,7 +163,7 @@ class IRGenerator:
         cond = self._gen_expr(stmt.condition)
         then_label = self._new_label("then")
         else_label = self._new_label("else")
-        end_label = self._new_label("endif")
+        end_label = self._new_label("end")
 
         if stmt.else_body is not None:
             self._emit(Branch(cond, then_label, else_label))
@@ -168,7 +196,7 @@ class IRGenerator:
                 t = self._new_temp("integer")
                 self._emit(BinOp("==", expr, case_val, t))
                 next_label = self._new_label("nextcase")
-                case_label = f"case{i}"
+                case_label = f"CASE{i}"
                 self._emit(Branch(t, case_label, next_label))
                 self._add_block(case_label)
                 for s in case.body:
@@ -280,6 +308,38 @@ class IRGenerator:
             return Const(expr.value, "float")
         elif isinstance(expr, ast.StringLiteral):
             return Const(expr.value, "filum")
+        elif isinstance(expr, ast.BooleanLiteral):
+            return Const(1 if expr.value else 0, "integer")
+        elif isinstance(expr, ast.IfExpr):
+            result_name = f"ifexpr_result_{self.temp_count}"
+            self.temp_count += 1
+            then_type = self._infer_expr_type(expr.then_expr)
+            self.locals.append(Var(result_name, then_type))
+            if then_type == "integer" or then_type == "boolean":
+                self._emit(Push(Const(0, "integer")))
+            elif then_type == "float":
+                self._emit(Push(Const(0.0, "float")))
+            elif then_type == "filum":
+                self._emit(Push(Const("", "filum")))
+            else:
+                self._emit(Push(Const(0, "integer")))
+            t = self._new_temp(then_type)
+            then_label = self._new_label("ifexprthen")
+            else_label = self._new_label("ifexprelse")
+            end_label = self._new_label("ifexprend")
+            cond = self._gen_expr(expr.condition)
+            self._emit(Branch(cond, then_label, else_label))
+            self._add_block(then_label)
+            then_val = self._gen_expr(expr.then_expr)
+            self._emit(Store(result_name, "local", then_val))
+            self._emit(Jump(end_label))
+            self._add_block(else_label)
+            else_val = self._gen_expr(expr.else_expr)
+            self._emit(Store(result_name, "local", else_val))
+            self._emit(Jump(end_label))
+            self._add_block(end_label)
+            self._emit(Load(result_name, "local", then_type, t))
+            return t
         elif isinstance(expr, ast.Identifier):
             scope = self._resolve_scope(expr.name)
             type = self._resolve_type(expr.name)
@@ -355,4 +415,38 @@ class IRGenerator:
             return "integer"
         if op in ("&&", "||"):
             return "integer"
+        return "integer"
+
+    def _infer_expr_type(self, expr) -> str:
+        if isinstance(expr, ast.IntegerLiteral):
+            return "integer"
+        elif isinstance(expr, ast.FloatLiteral):
+            return "float"
+        elif isinstance(expr, ast.StringLiteral):
+            return "filum"
+        elif isinstance(expr, ast.BooleanLiteral):
+            return "boolean"
+        elif isinstance(expr, ast.Identifier):
+            return self._resolve_type(expr.name)
+        elif isinstance(expr, ast.BinaryOp):
+            left = self._infer_expr_type(expr.left)
+            right = self._infer_expr_type(expr.right)
+            if expr.op in ("+", "-", "*", "/", "%"):
+                if left == "float" or right == "float":
+                    return "float"
+                return "integer"
+            return "integer"
+        elif isinstance(expr, ast.UnaryOp):
+            return self._infer_expr_type(expr.operand)
+        elif isinstance(expr, ast.ArrayIndex):
+            base_type = self._resolve_type(expr.name)
+            if base_type.startswith("vec<"):
+                return base_type[4:-1]
+            elif base_type.startswith("&"):
+                return base_type[1:]
+            return "integer"
+        elif isinstance(expr, ast.FunctionCall):
+            return "integer"
+        elif isinstance(expr, ast.Read):
+            return expr.read_type
         return "integer"

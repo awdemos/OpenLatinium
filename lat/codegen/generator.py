@@ -1,10 +1,16 @@
 import sys
+import re
 from typing import List, Optional, Dict, Tuple
 from dataclasses import dataclass, field
 
 from lat.ast import nodes
 from lat.utils.errors import compiler_error, compiler_note
 from lat.utils.errors import std_message
+
+
+def _parse_array_size(type_str: str) -> int:
+    m = re.search(r'\[(\d+)\]', type_str)
+    return int(m.group(1)) if m else 0
 
 
 @dataclass
@@ -174,8 +180,8 @@ class CodeGenerator:
                 size = len(decl.value.items)
                 array_shape = [size]
             else:
-                size = 0
-                array_shape = [0]
+                size = _parse_array_size(decl.type)
+                array_shape = [size]
             
             pos = self.global_count if is_global else self.frame_count
             var = VarInfo(name=decl.name, type=decl.type, stack_pos=pos, is_global=is_global, array_shape=array_shape)
@@ -191,11 +197,11 @@ class CodeGenerator:
                 for item in decl.value.items:
                     code += self.gen_expr(item)
                     self.pop_type()
-            elif decl.type == "vec<integer>":
+            elif decl.type.startswith("vec<integer>"):
                 code += f"PUSHN {size}\n"
-            elif decl.type == "vec<float>":
+            elif decl.type.startswith("vec<float>"):
                 code += "\n".join(["PUSHF 0.0"] * size) + "\n" if size > 0 else ""
-            elif decl.type == "vec<filum>":
+            elif decl.type.startswith("vec<filum>"):
                 code += "\n".join(["PUSHS ''"] * size) + "\n" if size > 0 else ""
             return code
         
@@ -552,6 +558,11 @@ class CodeGenerator:
         elif isinstance(expr, nodes.StringLiteral):
             self.push_type("filum")
             return f"PUSHS {expr.value}\n"
+        elif isinstance(expr, nodes.BooleanLiteral):
+            self.push_type("boolean")
+            return f"PUSHI {1 if expr.value else 0}\n"
+        elif isinstance(expr, nodes.IfExpr):
+            return self.gen_if_expr(expr)
         elif isinstance(expr, nodes.Identifier):
             var = self.current_scope.get(expr.name)
             if var is None:
@@ -740,6 +751,19 @@ class CodeGenerator:
         push_op = "PUSHGP" if var.is_global else "PUSHFP"
         self.push_type(f"&{var.type}")
         return f"{push_op}\nPUSHI {var.stack_pos}\nPADD\n"
+
+    def gen_if_expr(self, expr: nodes.IfExpr) -> str:
+        label_else = f"IFEXPR{self.label_counter}ELSE"
+        label_end = f"IFEXPR{self.label_counter}END"
+        self.label_counter += 1
+        code = self.gen_expr(expr.condition)
+        code += f"JZ {label_else}\n"
+        code += self.gen_expr(expr.then_expr)
+        code += f"JUMP {label_end}\n"
+        code += f"{label_else}:\n"
+        code += self.gen_expr(expr.else_expr)
+        code += f"{label_end}:\n"
+        return code
 
 
 def generate(program: nodes.Program) -> str:

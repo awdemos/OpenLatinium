@@ -17,6 +17,7 @@ def p_prog(p):
     """
     parser.global_count = 0
     parser.loop_count = 0
+    parser.logic_count = 0
     parser.if_count = 0
     if not parser.type_checker.is_empty():
         compiler_error(p, 1, f"Leftover types in type checker. {p.parser.type_checker}")
@@ -879,6 +880,7 @@ parser.rel_if_count = 0
 parser.match_count = 0
 parser.rel_match_count = 0
 parser.loop_count = 0
+parser.logic_count = 0
 parser.current_loops = []  # This is needed for break and continue statements to be checked
 parser.array_assign_items = 0
 parser.indexing_depth = []

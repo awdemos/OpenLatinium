@@ -424,13 +424,17 @@ class DeclarationAssignment:
 
         p[3] = p[3].replace(" ", "")  # Remove the spaces from the type
         if p.parser.current_scope.level == 0:  # If the variable is declared in the global scope, add it to the global scope
-            p.parser.current_scope.add(p[1], p[3], (p.parser.global_count, p.parser.global_count))
+            pos = p.parser.global_count
+            p.parser.current_scope.add(p[1], p[3], (pos, pos))
             p.parser.global_count += 1  # Increment the global count
+            store_op = f"STOREG {pos}"
         else:  # If the variable is declared in a function scope, add it to the function scope
-            p.parser.current_scope.add(p[1], p[3], (p.parser.frame_count, p.parser.frame_count))
+            pos = p.parser.frame_count
+            p.parser.current_scope.add(p[1], p[3], (pos, pos))
             p.parser.frame_count += 1  # Increment the frame count
+            store_op = f"STOREL {pos}"
 
-        return p[5]
+        return p[5] + std_message([store_op])
 
     def _array_items(self, p) -> str:  # Handles the array items
         """

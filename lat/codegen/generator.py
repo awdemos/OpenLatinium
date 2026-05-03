@@ -623,11 +623,19 @@ class CodeGenerator:
         elif op == 'AND':
             if left_type == right_type == "integer":
                 self.push_type("integer")
-                code += "AND\n"
+                count = self.label_counter
+                self.label_counter += 1
+                code += f"DUP 1\nJZ AND{count}END\nPOP 1\n"
+                code += self.gen_expr(expr.right)
+                code += f"AND{count}END:\n"
         elif op == 'OR':
             if left_type == right_type == "integer":
                 self.push_type("integer")
-                code += "OR\n"
+                count = self.label_counter
+                self.label_counter += 1
+                code += f"DUP 1\nJZ OR{count}RIGHT\nJUMP OR{count}END\nOR{count}RIGHT:\nPOP 1\n"
+                code += self.gen_expr(expr.right)
+                code += f"OR{count}END:\n"
         
         return code
     

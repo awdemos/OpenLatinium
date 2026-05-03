@@ -263,7 +263,9 @@ class TypeCheck:
         assert not left_operand.startswith("vec"), "vector type cannot appear in this stage"
         if right_operand == left_operand == "integer":
             self.stack.append("integer")
-            return p[1] + p[3] + std_message(["AND"])
+            count = p.parser.logic_count
+            p.parser.logic_count += 1
+            return p[1] + std_message(["DUP 1", f"JZ LOGL{count}END", "POP 1"]) + p[3] + std_message([f"LOGL{count}END:"])
         else:
             compiler_error(p, 2, f"Operation 'and' not supported for types '{left_operand}' and '{right_operand}'")
             sys.exit(1)
@@ -274,7 +276,9 @@ class TypeCheck:
         assert not left_operand.startswith("vec"), "vector type cannot appear in this stage"
         if right_operand == left_operand == "integer":
             self.stack.append("integer")
-            return p[1] + p[3] + std_message(["OR"])
+            count = p.parser.logic_count
+            p.parser.logic_count += 1
+            return p[1] + std_message(["DUP 1", "NOT", f"JZ LOGL{count}END", "POP 1"]) + p[3] + std_message([f"LOGL{count}END:"])
         else:
             compiler_error(p, 2, f"Operation 'or' not supported for types '{left_operand}' and '{right_operand}'")
             sys.exit(1)

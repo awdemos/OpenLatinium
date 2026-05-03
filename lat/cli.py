@@ -12,7 +12,7 @@ from lat.utils.colors import *
 OptArgs = Dict[str, str]
 ReqArgs = Dict[str, Union[str, bool]]
 possible_exec_modes = ["run", "build", "test", "euler", "examples"]
-possible_opt_args = ["-o", "--output", "-v", "--verbose", "-rec", "--record", "-clc", "--clean-up", "--ast", "--check"]
+possible_opt_args = ["-o", "--output", "-v", "--verbose", "-rec", "--record", "-clc", "--clean-up", "--ast", "--check", "--ir"]
 recognized_args = possible_exec_modes + possible_opt_args
 
 
@@ -90,11 +90,12 @@ def prepare_cmd_args() -> Tuple[OptArgs, ReqArgs]:
     verbose = True if "-v" in sys.argv else False
     use_ast = True if "--ast" in sys.argv else False
     check_only = True if "--check" in sys.argv else False
+    use_ir = True if "--ir" in sys.argv else False
 
     if verbose:
         warn_cmd("Verbose output is not implemented yet.")
 
-    opt_args = {"-o": output_file, "-v": verbose, "-rec": rec, "-clc": clc, "--ast": use_ast, "--check": check_only}
+    opt_args = {"-o": output_file, "-v": verbose, "-rec": rec, "-clc": clc, "--ast": use_ast, "--check": check_only, "--ir": use_ir}
 
     # Handle Required Arguments
     run = True if "run" in sys.argv else False
@@ -134,10 +135,9 @@ def build_execute(req_args: ReqArgs, opt_args: OptArgs):
         content = f.read()
         if content.startswith("//SKIP"):
             sys.exit(2)
-        if opt_args["--ast"]:
+        if opt_args.get("--ast") or opt_args.get("--ir"):
             from lat.parsing.ast_parser import parse as ast_parse
             from lat.semantic.analyzer import analyze_program
-            from lat.codegen.generator import generate as ast_generate
             program = ast_parse(content)
             success, errors, warnings = analyze_program(program)
             if not success:
@@ -146,7 +146,16 @@ def build_execute(req_args: ReqArgs, opt_args: OptArgs):
                 sys.exit(1)
             for w in warnings:
                 print(f"{COLOR_YELLOW}[WARNING]{RESET_COLOR} {w.message}")
-            output = ast_generate(program)
+            if opt_args.get("--ir"):
+                from lat.ir.generator import IRGenerator
+                from lat.codegen.from_ir import IRCodeGenerator
+                ir_gen = IRGenerator()
+                ir_program = ir_gen.generate(program)
+                codegen = IRCodeGenerator()
+                output = codegen.generate(ir_program)
+            else:
+                from lat.codegen.generator import generate as ast_generate
+                output = ast_generate(program)
         else:
             from lat import parser
             parser.input = content

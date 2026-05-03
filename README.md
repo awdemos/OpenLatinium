@@ -19,8 +19,8 @@ pip install -e .
 ### Docker (Recommended)
 
 ```bash
-docker build -t latinium .
-docker run --rm -v $(pwd):/app latinium build examples/hello_world.lat
+docker build -t openlatinum .
+docker run --rm -v $(pwd):/app openlatinum build examples/hello_world.lat
 ```
 
 ## Quick Start
@@ -104,13 +104,13 @@ si expression {
 }
 ```
 
-`par` (switch):
+`par` (match):
 ```rust
 par expression {
     expression -> {
         // code
     }
-    default -> {
+    defectus -> {
         // code
     }
 }
@@ -166,6 +166,110 @@ Options:
   -h, --help      Show help
   -o, --output    Specify output file
   -v, --verbose   Show verbose output
+  --ast           Use AST-based compiler path
+  --ir            Use IR pipeline (AST → IR → bytecode)
+  --check         Semantic analysis only (no codegen)
   -rec, --record  Record program outputs
   -clc, --clean-up  Clean generated files
 ```
+
+## Testing
+
+### Unit Tests
+
+Run all unit tests:
+```bash
+python -m pytest tests/ -v
+```
+
+Run specific test files:
+```bash
+python -m pytest tests/test_parser.py -v
+python -m pytest tests/test_semantic.py -v
+python -m pytest tests/test_codegen.py -v
+```
+
+### Integration Tests
+
+Run the full test suite against `.lat` programs:
+```bash
+lat test
+```
+
+Run with verbose output:
+```bash
+lat test -v
+```
+
+Run with AST compiler path:
+```bash
+lat test --ast
+```
+
+## VM and Execution
+
+OpenLatinum has two execution backends:
+
+1. **C VM** (original): The bytecode runs on a C-based stack VM. Build from `vms-source.zip`:
+   ```bash
+   unzip vms-source.zip -d /tmp/vms
+   cd /tmp/vms/vms
+   make
+   ```
+
+2. **Python Interpreter** (new): The bytecode can also run on a pure Python interpreter included in the compiler. This eliminates the C VM dependency for development and testing.
+
+The Python interpreter is transparent to the user - the same `.vms` bytecode files work with both backends.
+
+## Architecture
+
+The compiler has **three compilation paths**:
+
+1. **Original**: `lat/lexing/_lexer.py` → `lat/parsing/_parser.py` → `lat/semantics/*` → bytecode (single-pass, syntax-directed)
+2. **AST path** (`--ast`): `lat/parsing/ast_parser.py` → `lat/semantic/analyzer.py` → `lat/codegen/generator.py` → bytecode
+3. **IR path** (`--ir`): AST → `lat/ir/generator.py` → `lat/ir/nodes.py` → `lat/codegen/from_ir.py` → bytecode
+
+Key modules:
+- `lat/cli.py` — Entry point, argument parsing, test runner
+- `lat/parsing/ast_parser.py` — PLY-based parser that builds AST (`lat/ast/nodes.py`)
+- `lat/semantic/analyzer.py` — Visitor-based semantic analyzer with error collection
+- `lat/codegen/generator.py` — AST-to-bytecode generator (produces EWVM instructions)
+- `lat/vm_interpreter.py` — Python bytecode interpreter for executing `.vms` files
+- `lat/ir/generator.py` — AST-to-IR converter (three-address code)
+- `lat/codegen/from_ir.py` — IR-to-bytecode generator
+
+## Language Keywords
+
+| Latin | English | Purpose |
+|-------|---------|---------|
+| `si` | if | Conditional |
+| `aliter` | else | Alternative branch |
+| `par` | match | Pattern matching |
+| `casus` | case | Match case |
+| `defectus` | default | Default case |
+| `dum` | while | While loop |
+| `facio` | do | Do-while loop |
+| `enim` | for | For loop |
+| `confractus` | break | Break out of loop |
+| `pergo` | continue | Continue to next iteration |
+| `munus` | function | Function declaration |
+| `reditus` | return | Return from function |
+| `et` | and | Logical AND |
+| `aut` | or | Logical OR |
+| `non` | not | Logical NOT |
+| `imprimo` | print | Print statement |
+| `legerei` | read_int | Read integer |
+| `legeref` | read_float | Read float |
+| `legeres` | read_string | Read string |
+| `integer` | int | Integer type |
+| `float` | float | Float type |
+| `filum` | string | String type |
+| `vec` | array | Array type |
+
+## Contributing
+
+This is an open-source community project. Contributions welcome!
+
+## License
+
+MIT License - See LICENSE file for details.

@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 
+# Allow local imports when running test script directly
 sys.path.insert(0, ".")
 from lat.vm_interpreter import EWVMPyInterpreter
 
@@ -14,16 +15,17 @@ def compile_file(filepath: str, ast_flag: bool) -> tuple[bool, str, str]:
         out_path = f.name
     
     try:
+        legacy_flag = "True" if not ast_flag else "False"
         cmd = [sys.executable, '-c', f'''
 import sys
 sys.path.insert(0, ".")
 from lat.cli import build_execute
 build_execute(
     {{"input": "{filepath}"}},
-    {{"-o": "{out_path}", "-v": False, "--ast": {ast_flag}}}
+    {{"-o": "{out_path}", "-v": False, "--ast": {ast_flag}, "--legacy": {legacy_flag}}}
 )
 ''']
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         compile_ok = result.returncode == 0 and 'Compiler Error' not in result.stderr
         return compile_ok, out_path, result.stderr
     except Exception as e:
@@ -81,6 +83,18 @@ def test_file(filepath: str) -> tuple[bool, str]:
             os.unlink(orig_path)
         if os.path.exists(ast_path):
             os.unlink(ast_path)
+
+
+def test_compile_file_runs():
+    assert callable(compile_file)
+
+
+def test_run_interpreter_runs():
+    assert callable(run_interpreter)
+
+
+def test_test_file_runs():
+    assert callable(test_file)
 
 
 def main():

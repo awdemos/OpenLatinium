@@ -1,8 +1,25 @@
-import sys
+from typing import Any
 
 from ply import lex
 
-from lat import find_column, lex_error
+from lat.utils.errors import find_column, lex_error, CompilationError
+
+__all__ = [
+    "tokens",
+    "literals",
+    "reserved",
+    "lexer",
+    "t_error",
+    "t_FLOAT",
+    "t_INTEGER",
+    "t_PRINT",
+    "t_FILUM",
+    "t_ID",
+    "t_COMMENT",
+    "t_MULTICOMMENTS",
+    "t_NEWLINE",
+    "t_ignore",
+]
 
 arithmetics_literals = "[]()+-/*%^!{}&"  # Literals for arithmetics
 general_literals = ",:;"  # Literals for general use
@@ -100,9 +117,10 @@ def t_NEWLINE(t):
 t_ignore = " \t"  # Ignore spaces and tabs
 
 
-def t_error(t):  # Error handling
-    lex_error(t, "Illegal character '%s'" % t.value[0])
-    sys.exit(1)
+def t_error(t: Any) -> None:  # Error handling
+    msg = "Illegal character '%s'" % t.value[0]
+    lex_error(t, msg)
+    raise CompilationError(msg)
 
 
 lexer = lex.lex()

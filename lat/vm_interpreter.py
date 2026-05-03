@@ -47,7 +47,7 @@ class EWVMPyInterpreter:
                 label = line[:-1]
                 self.labels[label] = i
 
-    def run(self, input_data: str = '') -> str:
+    def run(self, input_data: str = '', max_steps: int = 100000) -> str:
         self.input_lines = input_data.split('\n') if input_data else []
         self.input_idx = 0
         self.output = []
@@ -57,7 +57,11 @@ class EWVMPyInterpreter:
         self.pc = 0
         self.call_stack = []
         self.running = True
+        steps = 0
         while self.running and self.pc < len(self.code):
+            if steps >= max_steps:
+                raise VMError(f"Step limit exceeded ({max_steps})")
+            steps += 1
             line = self.code[self.pc]
             self.pc += 1
             self._step(line)
@@ -107,7 +111,8 @@ class EWVMPyInterpreter:
         if self.sp == self.fp:
             raise VMError("Stack underflow (fp == sp)")
         self.sp -= 1
-        return self.stack[self.sp]
+        v = self.stack[self.sp]
+        return Value(v.type, v.val)
 
     def _get(self, idx: int) -> Value:
         idx = int(idx)
@@ -118,6 +123,8 @@ class EWVMPyInterpreter:
 
     def _set(self, idx: int, v: Value):
         idx = int(idx)
+        if idx < 0:
+            raise VMError(f"Stack access out of bounds: {idx}")
         while len(self.stack) <= idx:
             self.stack.append(Value('int', 0))
         self.stack[idx] = v
@@ -210,9 +217,11 @@ class EWVMPyInterpreter:
             raise VMError(f"Invalid type for LOADN: {ptr.type}")
 
     def _op_DUP(self, arg):
-        idx = int(self._parse_arg(arg))
-        v = self._get(self.sp - 1 - idx)
-        self._push(Value(v.type, v.val))
+        n = int(self._parse_arg(arg))
+        base = self.sp - n
+        for i in range(n):
+            v = self._get(base + i)
+            self._push(Value(v.type, v.val))
 
     def _op_DUPN(self, arg):
         n = int(self._parse_arg(arg))
@@ -531,19 +540,24 @@ class EWVMPyInterpreter:
         self.output.append(s)
 
 
-def run_bytecode(source: str, input_data: str = '') -> str:
+def run_bytecode(source: str, input_data: str = '', max_steps: int = 100000) -> str:
     vm = EWVMPyInterpreter()
     vm.load(source)
-    return vm.run(input_data)
+    return vm.run(input_data, max_steps)
 
 
-if __name__ == '__main__':
+def _main() -> int:
     import sys
     if len(sys.argv) < 2:
         print('Usage: python -m lat.vm_interpreter <file.vms> [input]')
-        sys.exit(1)
+        return 1
     with open(sys.argv[1], 'r') as f:
         source = f.read()
     input_data = sys.argv[2] if len(sys.argv) > 2 else ''
     result = run_bytecode(source, input_data)
     print(result, end='')
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(_main())

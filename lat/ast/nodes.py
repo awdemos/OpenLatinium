@@ -1,6 +1,16 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Union
 
+__all__ = [
+    "Param", "Function", "Program",
+    "IntegerLiteral", "FloatLiteral", "StringLiteral", "BooleanLiteral",
+    "Identifier", "BinaryOp", "UnaryOp", "ArrayIndex", "ArrayLiteral",
+    "ArrayRange", "Ref", "FunctionCall", "Read", "IfExpr",
+    "Decl", "Assignment", "Print", "If", "Case", "Default", "Match",
+    "While", "DoWhile", "For", "Return", "Break", "Continue", "Debug",
+    "Expr", "Stmt",
+]
+
 
 @dataclass
 class Param:

@@ -2,9 +2,7 @@ from __future__ import annotations
 from typing import Optional, Dict, List
 from dataclasses import dataclass, field
 
-import sys
-
-from lat import compiler_warning, compiler_error, compiler_note, std_message
+from lat.utils.errors import compiler_warning, compiler_error, compiler_note, std_message, CompilationError
 
 
 @dataclass
@@ -61,9 +59,7 @@ class Functions:
         function_id : FUNCTION ID
         """
         if p.parser.functions_handler.get(p[2]) is not None:
-            compiler_error(p, 2, f"Redefinition of function {p[2]}")
-            compiler_note("Called from Functions._id")
-            sys.exit(1)
+            raise CompilationError(f"Redefinition of function {p[2]}")
         p.parser.functions_handler.add(p[2])
         p.parser.functions_handler.current_function = p.parser.functions_handler.get(p[2])
         return std_message([f"{p[2].replace('_', '')}:"])
@@ -117,19 +113,11 @@ class Functions:
         func = self.get(p[1])
         current_func_name = p.parser.functions_handler.current_function.name if p.parser.functions_handler.current_function else "global scope"
         if func is None:  # If the function doesn't exist, report an error
-            compiler_error(p, 1, f"Function {p[1]} not declared")
-            compiler_note(f"Error on Function '{current_func_name}'")
-            compiler_note("Called from Functions._call")
-            sys.exit(1)
+            raise CompilationError(f"Function {p[1]} not declared")
         if len(func.input_types) != p.parser.num_args[-1]:  # If the number of arguments doesn't match the number of parameters, report an error
-            compiler_error(p, 1, f"Function {p[1]} expects {len(func.input_types)} arguments but got {p.parser.num_args[-1]}")
-            compiler_note(f"Error on Function '{current_func_name}'")
-            compiler_note("Called from Functions._call")
-            sys.exit(1)
+            raise CompilationError(f"Function {p[1]} expects {len(func.input_types)} arguments but got {p.parser.num_args[-1]}")
         if len(func.input_types) > 0 and func.input_types != p.parser.type_checker.stack[-len(func.input_types) :]:
-            compiler_error(p, 1, f"Function {p[1]} expects {func.input_types} but got {p.parser.type_checker.stack[-len(func.input_types):]}")
-            compiler_note("Called from Functions._call")
-            sys.exit(1)
+            raise CompilationError(f"Function {p[1]} expects {func.input_types} but got {p.parser.type_checker.stack[-len(func.input_types):]}")
         for _ in func.input_types:
             p.parser.type_checker.pop()
         if func.output_type is not None:
@@ -150,17 +138,11 @@ class Functions:
         if p[2] != ";":
             expr = p.parser.type_checker.pop()
             if expr != p.parser.functions_handler.current_function.output_type:
-                compiler_error(p, 1, f"Return type '{expr}' doesn't match function output type '{p.parser.functions_handler.current_function.output_type}'")
-                compiler_note(f"Error on Function '{p.parser.functions_handler.current_function.name}'")
-                compiler_note("Called from Functions._return")
-                sys.exit(1)
+                raise CompilationError(f"Return type '{expr}' doesn't match function output type '{p.parser.functions_handler.current_function.output_type}'")
 
             return p[2] + std_message([f"STOREL {-len(p.parser.functions_handler.current_function.input_types)-1}", "RETURN"])
 
         if p.parser.functions_handler.current_function.output_type is not None:
-            compiler_error(p, 1, f"Return type '{p.parser.functions_handler.current_function.output_type}' doesn't match function output type 'None'")
-            compiler_note(f"Error on Function '{p.parser.functions_handler.current_function.name}'")
-            compiler_note("Called from Functions._return")
-            sys.exit(1)
+            raise CompilationError(f"Return type '{p.parser.functions_handler.current_function.output_type}' doesn't match function output type 'None'")
 
         return std_message(["RETURN"])

@@ -1,8 +1,6 @@
 from copy import copy
 
-import sys
-
-from lat import compiler_error, compiler_note, std_message
+from lat.utils.errors import compiler_error, compiler_note, std_message, CompilationError
 
 
 class IO:
@@ -41,13 +39,9 @@ class IO:
         elif top == "float":  # If the top is an expression, print it
             push_op = std_message(["WRITEF"])
         elif top.startswith("&"):
-            compiler_error(p, 2, f"Can't print array. Not implemented yet.")
-            compiler_note("Called from IO._multiple")
-            sys.exit(1)
+            raise CompilationError(f"Can't print array. Not implemented yet.")
         else:
-            compiler_error(p, 2, f"Can't print expression of type '{top}'")
-            compiler_note("Called from IO._multiple")
-            sys.exit(1)
+            raise CompilationError(f"Can't print expression of type '{top}'")
 
         return p[1] + p[3] + push_op  # Whatever the multiple_prints production returns + the expression + the print operation
 
@@ -63,13 +57,9 @@ class IO:
         elif top == "float":  # If the top is an expression, print it
             push_op = std_message(["WRITEF"])
         elif top.startswith("&"):
-            compiler_error(p, 1, f"Can't print array. Not implemented yet.")
-            compiler_note("Called from IO._single")
-            sys.exit(1)
+            raise CompilationError(f"Can't print array. Not implemented yet.")
         else:
-            compiler_error(p, 1, f"Can't print expression of type '{top}'")
-            compiler_note("Called from IO._single")
-            sys.exit(1)
+            raise CompilationError(f"Can't print expression of type '{top}'")
         return p[1] + push_op  # Whatever the expression production returns + the print operation
 
     def _empty(self, p) -> str:  # printing nothing
@@ -100,9 +90,7 @@ class IO:
             p.parser.type_checker.push("filum")
             push_op = std_message([""])
         else:
-            compiler_error(p, 1, f"Unknown read type '{p[1]}'")
-            compiler_note("Called from IO._read_type")
-            sys.exit(1)
+            raise CompilationError(f"Unknown read type '{p[1]}'")
         return push_op
 
 
@@ -127,29 +115,17 @@ class Assignment:
         expr = p.parser.type_checker.pop()
         id_meta, in_function, _ = p.parser.current_scope.get(p[1])  # Get the meta data of the variable
         if id_meta is None:  # If the variable doesn't exist, report an error
-            compiler_error(p, 1, f"Assignment to undeclared variable {p[1]}")
-            compiler_note("Called from Assignment._array_index")
-            sys.exit(1)
+            raise CompilationError(f"Assignment to undeclared variable {p[1]}")
         if not id_meta.type.startswith("vec") and not id_meta.type.startswith("&"): # If the variable isn't an array or pointer, report an error
-            compiler_error(p, 1, f"Indexing not allowed on variable of type '{id_meta.type}'")
-            compiler_note("Called from Assignment._array_index")
-            sys.exit(1)
+            raise CompilationError(f"Indexing not allowed on variable of type '{id_meta.type}'")
         if id_meta.type.startswith("vec") and id_meta.type[4:-1] != expr: # If the variable is an array and the expression doesn't match the array type, report an error
-            compiler_error(p, 3, f"Assignment of '{expr}' to variable of type '{id_meta.type}'")
-            compiler_note("Called from Assignment._array_index")
-            sys.exit(1)
+            raise CompilationError(f"Assignment of '{expr}' to variable of type '{id_meta.type}'")
         if id_meta.type.startswith("&") and id_meta.type[1:] != expr: # If the variable is a pointer and the expression doesn't match the pointer type, report an error
-            compiler_error(p, 3, f"Assignment of '{expr}' to variable of type '{id_meta.type}'")
-            compiler_note("Called from Assignment._array_index")
-            sys.exit(1)
+            raise CompilationError(f"Assignment of '{expr}' to variable of type '{id_meta.type}'")
         if len(p.parser.indexing_depth[-1]) > 1 and id_meta.type.startswith("&"): # If the pointer is indexed with more than one dimension, report an error
-            compiler_error(p, 1, f"Can't index pointer with more than one dimension")
-            compiler_note("Called from Primary._indexing")
-            sys.exit(1)
+            raise CompilationError(f"Can't index pointer with more than one dimension")
         if id_meta.array_shape and len(p.parser.indexing_depth[-1]) != len(id_meta.array_shape): # If the number of dimensions doesn't match, report an error
-            compiler_error(p, 1, f"Assignment to arrays only allowed with the same number of dimensions. Expected {len(id_meta.array_shape)} got {len(p.parser.indexing_depth[-1])}")
-            compiler_note("Called from Assignment._array_index")
-            sys.exit(1)
+            raise CompilationError(f"Assignment to arrays only allowed with the same number of dimensions. Expected {len(id_meta.array_shape)} got {len(p.parser.indexing_depth[-1])}")
 
         push_op = "PUSHGP" if not in_function else "PUSHFP"  # Get the correct push operation
         if id_meta.type.startswith("vec"): # If the variable is an array
@@ -172,19 +148,13 @@ class Assignment:
         expr = p.parser.type_checker.pop()
         id_meta, in_function, _ = p.parser.current_scope.get(p[1])  # Get the meta data of the variable
         if id_meta is None:  # If the variable doesn't exist, report an error
-            compiler_error(p, 1, f"Assignment to undeclared variable {p[1]}")
-            compiler_note("Called from Assignment._expression")
-            sys.exit(1)
+            raise CompilationError(f"Assignment to undeclared variable {p[1]}")
         if id_meta.type.startswith("vec"):
-            compiler_error(p, 1, f"Assignment to array not allowed. Use indexing instead.")
-            compiler_note("Called from Assignment._expression")
-            sys.exit(1)
+            raise CompilationError(f"Assignment to array not allowed. Use indexing instead.")
         if id_meta.type.startswith("&") and expr.startswith("vec") and id_meta.type[1:] == expr[4:-1]:
             pass  # If ID is of type &T and expr is of type vec<T>, then it's fine
         elif id_meta.type != expr:  # If the types don't match, report an error
-            compiler_error(p, 1, f"Assignment of '{expr}' to variable of type '{id_meta.type}'")
-            compiler_note("Called from Assignment._variable")
-            sys.exit(1)
+            raise CompilationError(f"Assignment of '{expr}' to variable of type '{id_meta.type}'")
 
         store_op = "STOREG" if not in_function else "STOREL"  # Get the correct store operation
         return std_message([f"{p[3]}{store_op} {id_meta.stack_position[0]}"])
@@ -211,9 +181,7 @@ class Declaration:
         declaration : ID ':' type
         """
         if p[1] in p.parser.current_scope.Table:  # If the variable already exists in the current scope table, report an error
-            compiler_error(p, 1, f"Variable {p[1]} is already defined")
-            compiler_note("Called from Declaration._variable_declaration")
-            sys.exit(1)
+            raise CompilationError(f"Variable {p[1]} is already defined")
 
         p[3] = p[3].replace(" ", "")  # Remove the spaces from the type
         if p.parser.current_scope.level == 0:  # If the variable is declared in the global scope, add it to the global scope
@@ -235,9 +203,7 @@ class Declaration:
         declaration : ID ':' Ptype
         """
         if p[1] in p.parser.current_scope.Table:
-            compiler_error(p, 1, f"Variable {p[1]} is already defined")
-            compiler_note("Called from Declaration._pointer_declaration")
-            sys.exit(1)
+            raise CompilationError(f"Variable {p[1]} is already defined")
 
         p[3] = p[3].replace(" ", "")  # Remove the spaces from the type
         if p.parser.current_scope.level == 0:  # If the variable is declared in the global scope, add it to the global scope
@@ -262,14 +228,10 @@ class Declaration:
         declaration : ID ':' Vtype ndim
         """
         if p[1] in p.parser.current_scope.Table:
-            compiler_error(p, 1, f"Variable {p[1]} is already defined")
-            compiler_note("Called from Declaration._array_declaration")
-            sys.exit(1)
+            raise CompilationError(f"Variable {p[1]} is already defined")
         for i, dim in enumerate(p.parser.arr_dim):
             if dim == 0:
-                compiler_error(p, 1, f"Array {p[1]} initialized with dimension of size 0 in dimension {i+1}")
-                compiler_note("Called from Declaration._array_declaration")
-                sys.exit(1)
+                raise CompilationError(f"Array {p[1]} initialized with dimension of size 0 in dimension {i+1}")
 
         array_size = 1
         for dim in p.parser.arr_dim:
@@ -290,9 +252,7 @@ class Declaration:
         elif p[3] == "vec<filum>":
             return std_message([f"PUSHS ''" for i in range(array_size)])
         else:
-            compiler_error(p, 1, f"Invalid array type '{p[3]}' in declaration")
-            compiler_note("Called from Declaration._array_declaration")
-            sys.exit(1)
+            raise CompilationError(f"Invalid array type '{p[3]}' in declaration")
 
     def _array_dimension(self, p) -> str:
         """
@@ -328,9 +288,7 @@ class DeclarationAssignment:
                                 | ID ':' Vtype ASSIGN '[' arrayitems ']'
         """
         if p[1] in p.parser.current_scope.Table:    # If the variable already exists in the current scope table, report an error
-            compiler_error(p, 1, f"Variable {p[1]} is already defined")
-            compiler_note("Called from DeclarationAssignment._array_literal_init")
-            sys.exit(1)
+            raise CompilationError(f"Variable {p[1]} is already defined")
         array_shape = [p.parser.array_assign_items]
         if len(p) == 9:
             array_size = 1
@@ -338,15 +296,11 @@ class DeclarationAssignment:
             for dim in p.parser.arr_dim:
                 array_size *= dim
             if array_size != p.parser.array_assign_items:
-                compiler_error(p, 1, f"Initialization of array of type '{p[3]}' with {p.parser.array_assign_items} items. Expected {array_size}")
-                compiler_note("Called from DeclarationAssignment._array_literal_init")
-                sys.exit(1)
+                raise CompilationError(f"Initialization of array of type '{p[3]}' with {p.parser.array_assign_items} items. Expected {array_size}")
         for i in range(p.parser.array_assign_items):
             item = p.parser.type_checker.pop()
             if item != p[3][4:-1]:
-                compiler_error(p, 5, f"Initialization of array of type '{p[3]}' with item of type '{item}'. Look at item {p.parser.array_assign_items-i}")
-                compiler_note("Called from DeclarationAssignment._array_literal_init")
-                sys.exit(1)
+                raise CompilationError(f"Initialization of array of type '{p[3]}' with item of type '{item}'. Look at item {p.parser.array_assign_items-i}")
 
         p[3] = p[3].replace(" ", "") # Remove the spaces from the type
         if p.parser.current_scope.level == 0:   # If the variable is declared in the global scope, add it to the global scope
@@ -364,13 +318,9 @@ class DeclarationAssignment:
         declaration_assignment : ID ':' Vtype ASSIGN '['   integer RETI   integer ']'
         """
         if p[1] in p.parser.current_scope.Table:  # If the variable already exists in the current scope table, report an error
-            compiler_error(p, 1, f"Variable {p[1]} is already defined")
-            compiler_note("Called from DeclarationAssignment._array_range_init")
-            sys.exit(1)
+            raise CompilationError(f"Variable {p[1]} is already defined")
         if p[3] != "vec<integer>":  # If the variable is not an integer array, report an error
-            compiler_error(p, 1, f"Array of type '{p[3]}' cannot be initialized with a range")
-            compiler_note("Called from DeclarationAssignment._array_range_init")
-            sys.exit(1)
+            raise CompilationError(f"Array of type '{p[3]}' cannot be initialized with a range")
 
         start = int(p[6])
         end = int(p[8])
@@ -390,13 +340,9 @@ class DeclarationAssignment:
         """
         expr = p.parser.type_checker.pop()
         if p[1] in p.parser.current_scope.Table:  # If the variable already exists in the current scope table, report an error
-            compiler_error(p, 1, f"Variable {p[1]} is already defined")
-            compiler_note("Called from DeclarationAssignment._pointer_init")
-            sys.exit(1)
+            raise CompilationError(f"Variable {p[1]} is already defined")
         if not expr.startswith("vec") and expr != p[3]:  # Can only assign vectors and pointers to pointer
-            compiler_error(p, 5, f"Initialization of pointer of type '{p[3]}' with expression of type '{expr}'")
-            compiler_note("Called from DeclarationAssignment._pointer_init")
-            sys.exit(1)
+            raise CompilationError(f"Initialization of pointer of type '{p[3]}' with expression of type '{expr}'")
 
         p[3] = p[3].replace(" ", "")  # Remove the spaces from the type
         if p.parser.current_scope.level == 0:
@@ -414,13 +360,9 @@ class DeclarationAssignment:
         """
         expr = p.parser.type_checker.pop()
         if p[1] in p.parser.current_scope.Table:  # If the variable already exists in the current scope table, report an error
-            compiler_error(p, 1, f"Redeclaration of variable '{p[1]}'")
-            compiler_note("Called from DeclarationAssignment._variable_init")
-            sys.exit(1)
+            raise CompilationError(f"Redeclaration of variable '{p[1]}'")
         if p[3] != expr:  # If the variable type and the expression type do not match, report an error
-            compiler_error(p, 4, f"Initialization of variable of type '{p[3]}' with expression of type '{expr}'")
-            compiler_note("Called from DeclarationAssignment._variable_init")
-            sys.exit(1)
+            raise CompilationError(f"Initialization of variable of type '{p[3]}' with expression of type '{expr}'")
 
         p[3] = p[3].replace(" ", "")  # Remove the spaces from the type
         if p.parser.current_scope.level == 0:  # If the variable is declared in the global scope, add it to the global scope
@@ -468,9 +410,7 @@ class If:
         """
         expr = p.parser.type_checker.pop()
         if expr != "integer":
-            compiler_error(p, 1, f"Condition type must be 'integer', not '{expr}'")
-            compiler_note("Called from If._if")
-            sys.exit(1)
+            raise CompilationError(f"Condition type must be 'integer', not '{expr}'")
 
         current_if_count = p.parser.if_count  # Get the current if count
         out = p[2]  # Push condition to the stack
@@ -494,9 +434,7 @@ class If:
 
         expr = p.parser.type_checker.pop()
         if expr != "integer":
-            compiler_error(p, 2, f"Condition type must be 'integer', not '{expr}'")
-            compiler_note("Called from If._if_else")
-            sys.exit(1)
+            raise CompilationError(f"Condition type must be 'integer', not '{expr}'")
 
         current_if_count = p.parser.if_count  # Get the current if count
         out = p[3]  # Push condition to the stack
@@ -549,9 +487,7 @@ class Match:
         """
         expr = p.parser.type_checker.pop()
         if expr == "filum":  # Strings cannot be compared
-            compiler_error(p, 3, "Cannot use 'match' with 'filum' type")
-            compiler_note("Called from match._match")
-            sys.exit(1)
+            raise CompilationError("Cannot use 'match' with 'filum' type")
         p.parser.type_checker.push(expr)  # Push the expression type back on the stack
 
         current_match_count = p.parser.match_count  # Get the current match count
@@ -575,9 +511,7 @@ class Match:
         expr = p.parser.type_checker.pop()
         case = p.parser.type_checker.pop()
         if expr != case:
-            compiler_error(p, 2, f"Incompatible types in 'match' statement. Expected '{case}', got '{expr}'")
-            compiler_note("Called from match._cases")
-            sys.exit(1)
+            raise CompilationError(f"Incompatible types in 'match' statement. Expected '{case}', got '{expr}'")
         p.parser.type_checker.push(case)  # Push the case type back on the stack
 
         current_match_count = p.parser.match_count  # Get the current match count
@@ -630,9 +564,7 @@ class Loop:
         """
         expr = p.parser.type_checker.pop()
         if expr != "integer":
-            compiler_error(p, 1, f"Condition type must be 'integer', not '{expr}'")
-            compiler_note("Called from Loop._while")
-            sys.exit(1)
+            raise CompilationError(f"Condition type must be 'integer', not '{expr}'")
 
         current_while_count = p.parser.loop_count
         out = std_message([f"LOOP{current_while_count}START:"])  # Start of the while loop
@@ -654,9 +586,7 @@ class Loop:
         """
         expr = p.parser.type_checker.pop()
         if expr != "integer":
-            compiler_error(p, 1, f"Condition type must be 'integer', not '{expr}'")
-            compiler_note("Called from Loop._do_while")
-            sys.exit(1)
+            raise CompilationError(f"Condition type must be 'integer', not '{expr}'")
 
         current_do_while_count = p.parser.loop_count
         out = std_message([f"LOOP{current_do_while_count}START:"])  # Start of the do while loop
@@ -678,9 +608,7 @@ class Loop:
         """
         expr = p.parser.type_checker.pop()
         if expr != "integer":
-            compiler_error(p, 5, f"Condition type must be 'integer', not '{expr}'")
-            compiler_note("Called from Loop._for")
-            sys.exit(1)
+            raise CompilationError(f"Condition type must be 'integer', not '{expr}'")
 
         current_for = p.parser.loop_count
         out = p[4]  # Perform the for_inits
@@ -754,9 +682,7 @@ class BreakContinue:
         break : BREAK
         """
         if len(p.parser.current_loops) == 0:
-            compiler_error(p, 1, "'break' statement not allowed outside of a loop")
-            compiler_note("Called from BreakContinue._break")
-            sys.exit(1)
+            raise CompilationError("'break' statement not allowed outside of a loop")
 
         return std_message([f"JUMP LOOP{p.parser.loop_count}END"])
 
@@ -765,12 +691,8 @@ class BreakContinue:
         continue : CONTINUE
         """
         if len(p.parser.current_loops) == 0:
-            compiler_error(p, 1, "'continue' statement not allowed outside of a loop")
-            compiler_note("Called from BreakContinue._continue.")
-            sys.exit(1)
+            raise CompilationError("'continue' statement not allowed outside of a loop")
         if p.parser.current_loops[-1] == "DO":
-            compiler_error(p, 1, "'continue' statement not allowed inside of do-while loop")
-            compiler_note("Called from BreakContinue._continue.")
-            sys.exit(1)
+            raise CompilationError("'continue' statement not allowed inside of do-while loop")
 
         return std_message([f"JUMP NEXTLOOP{p.parser.loop_count}"])

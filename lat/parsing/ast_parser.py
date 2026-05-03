@@ -1,7 +1,7 @@
-import sys
 from ply import yacc
 from lat.lexing._lexer import tokens, literals
 from lat.ast.nodes import *
+from lat.utils.errors import CompilationError
 
 def p_prog(p):
     """
@@ -596,11 +596,13 @@ def p_single_arg(p):
 
 def p_error(p):
     if p is None:
-        sys.stderr.write("Syntax Error: Unexpected end of file\n")
+        msg = "Syntax Error: Unexpected end of file"
+        sys.stderr.write(msg + "\n")
+        raise CompilationError(msg)
     else:
         from lat.utils.errors import syntax_error
         syntax_error(p, f"Invalid syntax '{p.value}'")
-    sys.exit(1)
+        raise CompilationError(f"Invalid syntax '{p.value}'")
 
 parser = yacc.yacc(start='prog', errorlog=yacc.NullLogger())
 

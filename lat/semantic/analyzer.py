@@ -1,10 +1,10 @@
-"""Semantic analyzer for Latinium AST. Collects all errors instead of exiting on first error."""
+"""Semantic analyzer for OpenLatinum AST. Collects all errors instead of exiting on first error."""
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Tuple, Union
 import sys
 
 from lat.ast.nodes import *
-from lat import std_message, compiler_error, compiler_note
+from lat.utils.errors import std_message, compiler_error, compiler_note
 
 
 @dataclass

@@ -21,7 +21,7 @@ build_execute(
     {{"-o": "{out_path}", "-v": False, {flags}}}
 )
 ''']
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         compile_ok = result.returncode == 0 and 'Compiler Error' not in result.stderr and 'SEMANTIC ERROR' not in result.stderr
         return compile_ok, out_path, result.stderr
     except Exception as e:
@@ -42,7 +42,7 @@ build_execute(
     {{"-o": "{out_path}", "-v": False, "--ast": True}}
 )
 ''']
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         compile_ok = result.returncode == 0 and 'Compiler Error' not in result.stderr and 'SEMANTIC ERROR' not in result.stderr
         return compile_ok, out_path, result.stderr
     except Exception as e:

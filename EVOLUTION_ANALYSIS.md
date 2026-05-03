@@ -1,13 +1,13 @@
-# Latinium Evolution Analysis
+# OpenLatinum Evolution Analysis
 ## A 7-Phase Architectural Audit and Forward Design
 
 ---
 
 ## Phase 0: System Reconstruction — Full Codebase Archaeology
 
-### 0.1 What Latinium Actually Is
+### 0.1 What OpenLatinum Actually Is
 
-Latinium is a **teaching compiler** for a C-like language, built as a syntax-directed translator using Python PLY (Python Lex-Yacc). It compiles source code directly to bytecode for the EWVM (Easy Virtual Machine), a stack-based VM developed at the University of Minho for compiler construction courses.
+OpenLatinum is a **teaching compiler** for a C-like language, built as a syntax-directed translator using Python PLY (Python Lex-Yacc). It compiles source code directly to bytecode for the EWVM (Easy Virtual Machine), a stack-based VM developed at the University of Minho for compiler construction courses.
 
 **Core philosophy**: Single-pass compilation with immediate code emission. No AST. No IR. Parse → Check → Emit, all in one traversal.
 
@@ -243,7 +243,7 @@ This function should be:
 - **Verifiable** (each phase has invariants that can be checked)
 - **Optimizable** (intermediate representations enable transformations)
 
-Latinium violates all four properties.
+OpenLatinum violates all four properties.
 
 ### 2.2 The Ideal Pipeline
 
@@ -334,7 +334,7 @@ This enables:
 
 **Decision**: Add a full AST layer between parsing and code generation.
 
-**Rationale**: The no-AST design is the root cause of 80% of Latinium's limitations. Every advanced feature (optimization, better errors, IDE support, modules) requires an AST.
+**Rationale**: The no-AST design is the root cause of 80% of OpenLatinum's limitations. Every advanced feature (optimization, better errors, IDE support, modules) requires an AST.
 
 **New pipeline**:
 ```
@@ -543,7 +543,7 @@ class ErrorCollector:
 
 ### 4.1 Critique: "You're Over-Engineering a Teaching Compiler"
 
-**Attack**: Latinium is a course project. Adding an AST, IR, SSA, and a proper type system turns a 3,000-line teaching compiler into a 30,000-line production compiler. Students won't learn the basics because they'll be lost in abstraction layers.
+**Attack**: OpenLatinum is a course project. Adding an AST, IR, SSA, and a proper type system turns a 3,000-line teaching compiler into a 30,000-line production compiler. Students won't learn the basics because they'll be lost in abstraction layers.
 
 **Defense**: The critique is partially valid. The full redesign is the **target state**, not the immediate next step. The migration path (see Phase 7) preserves the teaching value by:
 - Keeping the first version simple (AST only, no IR)
@@ -577,7 +577,7 @@ class ErrorCollector:
 
 ### 4.4 Critique: "The Type System Is Fine for the Target Language"
 
-**Attack**: Latinium only has 3 base types + pointers + arrays. A string-based type system with 5 patterns is simpler and sufficient. Adding a type hierarchy is premature abstraction.
+**Attack**: OpenLatinum only has 3 base types + pointers + arrays. A string-based type system with 5 patterns is simpler and sufficient. Adding a type hierarchy is premature abstraction.
 
 **Defense**: The string type system has already caused bugs (the `UnboundLocalError` in IO handlers was triggered by unrecognized type strings). More importantly:
 - Adding `boolean` would require touching ~20 locations
@@ -827,7 +827,7 @@ Each test compiles a `.lat` file and either:
 | IR | SSA form (each variable assigned once); all basic blocks have terminators |
 | Bytecode | All labels resolved; stack depth bounded; valid EWVM instructions |
 
-### 6.4 What Is Preserved from Latinium 1.0
+### 6.4 What Is Preserved from OpenLatinum 1.0
 
 - **The language grammar** — `integer`, `float`, `filum`, `vec<>`, functions, pointers, control flow
 - **The target VM** — EWVM bytecode format is unchanged; VM is now containerized
@@ -981,7 +981,7 @@ The VM has been containerized using **Chainguard** minimal images for security a
 
 ## Summary
 
-Latinium is a **functional teaching compiler** with **deep architectural limitations** that prevent evolution. The core problems are:
+OpenLatinum is a **functional teaching compiler** with **deep architectural limitations** that prevent evolution. The core problems are:
 
 1. **No AST** — prevents optimization, good errors, and IDE support
 2. **String types** — brittle and unextensible
@@ -1000,7 +1000,7 @@ The **evolution path** is incremental, not a rewrite:
 7. **Parser modernization** — replace PLY
 8. **Language extensions** — structs, modules, boolean
 
-Each phase produces a **working compiler** that passes all tests. The migration preserves Latinium's teaching value while transforming it into a **production-quality compiler framework**.
+Each phase produces a **working compiler** that passes all tests. The migration preserves OpenLatinum's teaching value while transforming it into a **production-quality compiler framework**.
 
 ---
 

@@ -5,54 +5,42 @@ from lat.ir.nodes import (
     Const, IRFunction, IRProgram, Jump, Label, Load, Push, Read, Return,
     Store, Temp, UnaryOp, Var, Write
 )
+from lat.codegen.emitters import BytecodeEmitter
 from lat.utils.errors import compiler_error
 
 
 class IRCodeGenerator:
     def __init__(self):
-        self.output = []
+        self.emitter = BytecodeEmitter()
         self.global_count = 0
         self.globals: Dict[str, int] = {}
         self.current_function: Optional[str] = None
         self.frame_count = 0
         self.locals: Dict[str, int] = {}
         self.params: Dict[str, int] = {}
-        self.label_counter = 0
-
-    def new_label(self, prefix: str = "L") -> str:
-        self.label_counter += 1
-        return f"{prefix}{self.label_counter}"
-
-    def emit(self, line: str):
-        self.output.append(line)
 
     def generate(self, program: IRProgram) -> str:
-        self.output = []
+        self.emitter = BytecodeEmitter()
         self.globals = {}
         self.global_count = 0
 
         for g in program.globals:
             self.globals[g.name] = self.global_count
             self.global_count += 1
-            self.emit(f"PUSHN 1")
+            self.emitter.emit("PUSHN 1")
 
-        self.emit("start")
-        self.emit("PUSHA main")
-        self.emit("CALL")
-        self.emit("stop")
+        self.emitter.emit_main_entry()
 
         for func in program.functions:
             self._gen_function(func)
 
-        return "\n".join(self.output) + "\n"
+        return self.emitter.to_string()
 
     def _gen_function(self, func: IRFunction):
         self.current_function = func.name
         self.frame_count = 0
         self.locals = {}
         self.params = {}
-
-        self.emit(f"\n{func.name}:")
 
         for i, param in enumerate(func.params):
             self.params[param.name] = -(len(func.params) - i)
@@ -61,19 +49,18 @@ class IRCodeGenerator:
             self.locals[local.name] = self.frame_count
             self.frame_count += 1
 
-
-
-        for i, param in enumerate(func.params):
-            self.emit(f"PUSHI 0")
-            self.emit("PUSHFP")
-            self.emit(f"LOAD {-i - 1}")
-            self.emit(f"STOREL {i}")
+        self.emitter.emit_function_prologue(
+            func.name,
+            self.frame_count,
+            len(func.params),
+            params_to_locals=bool(func.params),
+        )
 
         for block in func.blocks:
             self._gen_block(block)
 
     def _gen_block(self, block: BasicBlock):
-        self.emit(f"{block.label}:")
+        self.emitter.emit(f"{block.label}:")
         for instr in block.instructions:
             self._gen_instruction(instr)
 
@@ -97,11 +84,11 @@ class IRCodeGenerator:
         elif isinstance(instr, Return):
             self._gen_return(instr)
         elif isinstance(instr, Jump):
-            self.emit(f"JUMP {instr.label}")
+            self.emitter.emit(f"JUMP {instr.label}")
         elif isinstance(instr, Branch):
             self._gen_branch(instr)
         elif isinstance(instr, Label):
-            self.emit(f"{instr.name}:")
+            self.emitter.emit(f"{instr.name}:")
         elif isinstance(instr, Read):
             self._gen_read(instr)
         elif isinstance(instr, Write):
@@ -112,140 +99,82 @@ class IRCodeGenerator:
             self._gen_push(instr)
 
     def _gen_const(self, instr: Const):
-        if instr.type == "integer":
-            self.emit(f"PUSHI {instr.value}")
-        elif instr.type == "float":
-            self.emit(f"PUSHF {instr.value}")
-        elif instr.type == "filum":
-            val = instr.value
-            if val.startswith('"') and val.endswith('"'):
-                val = val[1:-1]
-            self.emit(f'PUSHS "{val}"')
-        else:
-            self.emit(f"PUSHI 0")
+        self.emitter.emit_push(instr.type, instr.value)
 
     def _gen_load(self, instr: Load):
         if instr.scope == "global":
             pos = self.globals.get(instr.name, 0)
-            self.emit("PUSHGP")
-            self.emit(f"LOAD {pos}")
         elif instr.scope == "local":
             pos = self.locals.get(instr.name, 0)
-            self.emit("PUSHFP")
-            self.emit(f"LOAD {pos}")
         elif instr.scope == "param":
             pos = self.params.get(instr.name, 0)
-            self.emit("PUSHFP")
-            self.emit(f"LOAD {pos}")
+        else:
+            pos = 0
+        self.emitter.emit_load(instr.scope, pos)
 
     def _gen_store(self, instr: Store):
         self._gen_operand(instr.value)
         if instr.scope == "global":
             pos = self.globals.get(instr.name, 0)
-            self.emit(f"STOREG {pos}")
         elif instr.scope == "local":
             pos = self.locals.get(instr.name, 0)
-            self.emit(f"STOREL {pos}")
         elif instr.scope == "param":
             pos = self.params.get(instr.name, 0)
-            self.emit("PUSHFP")
-            self.emit(f"STORE {pos}")
+        else:
+            pos = 0
+        self.emitter.emit_store(instr.scope, pos)
 
     def _gen_binop(self, instr: BinOp):
         self._gen_operand(instr.left)
         self._gen_operand(instr.right)
-        op_map = {
-            "+": "ADD",
-            "-": "SUB",
-            "*": "MUL",
-            "/": "DIV",
-            "%": "MOD",
-            "<": "INF",
-            ">": "SUP",
-            "<=": "INFEQ",
-            ">=": "SUPEQ",
-            "==": "EQUAL",
-            "!=": "NOT\nEQUAL",
-            "&&": "AND",
-            "||": "OR",
-            "EQ": "EQUAL",
-            "NEQ": "NOT\nEQUAL",
-            "LT": "INF",
-            "GT": "SUP",
-            "LTE": "INFEQ",
-            "GTE": "SUPEQ",
-            "AND": "AND",
-            "OR": "OR",
-        }
-        vm_op = op_map.get(instr.op, instr.op.upper())
-        self.emit(vm_op)
+        self.emitter.emit_binop(instr.op)
 
     def _gen_unaryop(self, instr: UnaryOp):
         self._gen_operand(instr.operand)
-        if instr.op == "-":
-            self.emit("PUSHI -1")
-            self.emit("MUL")
-        elif instr.op == "!":
-            self.emit("NOT")
-        elif instr.op == "++":
-            self.emit("PUSHI 1")
-            self.emit("ADD")
-        elif instr.op == "--":
-            self.emit("PUSHI 1")
-            self.emit("SUB")
+        self.emitter.emit_unaryop(instr.op)
 
     def _gen_arrayload(self, instr: ArrayLoad):
         self._gen_operand(instr.base)
         self._gen_operand(instr.index)
-        self.emit("LOAD 0")
+        self.emitter.emit("LOAD 0")
 
     def _gen_arraystore(self, instr: ArrayStore):
         self._gen_operand(instr.base)
         self._gen_operand(instr.index)
         self._gen_operand(instr.value)
-        self.emit("STORE 0")
+        self.emitter.emit("STORE 0")
 
     def _gen_call(self, instr: Call):
         for arg in instr.args:
             self._gen_operand(arg)
-        self.emit(f"PUSHA {instr.name}")
-        self.emit("CALL")
+        self.emitter.emit(f"PUSHA {instr.name}")
+        self.emitter.emit("CALL")
         if instr.result is None:
-            self.emit("POP 1")
+            self.emitter.emit("POP 1")
 
     def _gen_return(self, instr: Return):
         if instr.value is not None:
             self._gen_operand(instr.value)
         else:
-            self.emit("PUSHI 0")
-        self.emit("RETURN")
+            self.emitter.emit("PUSHI 0")
+        self.emitter.emit("RETURN")
 
     def _gen_branch(self, instr: Branch):
         self._gen_operand(instr.cond)
-        self.emit(f"JZ {instr.false_label}")
-        self.emit(f"JUMP {instr.true_label}")
+        self.emitter.emit(f"JZ {instr.false_label}")
+        self.emitter.emit(f"JUMP {instr.true_label}")
 
     def _gen_read(self, instr: Read):
-        read_map = {
-            "integer": "READ",
-            "float": "READF",
-            "filum": "READS",
-        }
-        self.emit(read_map.get(instr.read_type, "READ"))
+        self.emitter.emit_read(instr.read_type)
 
     def _gen_write(self, instr: Write):
         self._gen_operand(instr.value)
         op_type = getattr(instr.value, 'type', 'integer')
-        if op_type == "float":
-            self.emit("WRITEF")
-        elif op_type == "filum":
-            self.emit("WRITES")
-        else:
-            self.emit("WRITEI")
+        self.emitter.emit_write(op_type)
 
     def _gen_alloc(self, instr: Alloc):
         self._gen_operand(instr.size)
-        self.emit("PUSHN 1")
+        self.emitter.emit("PUSHN 1")
 
     def _gen_push(self, instr: Push):
         self._gen_operand(instr.value)

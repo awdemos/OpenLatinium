@@ -530,7 +530,7 @@ Run the test suites:
 
 ```bash
 python test_ast.py    # AST path tests
-python test_ir.py     # IR path tests
+python ir_validate.py  # IR path tests
 ```
 
 Add a new test:

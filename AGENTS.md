@@ -1,11 +1,11 @@
-# Latinium Compiler — Agent Guide
+# OpenLatinum Compiler — Agent Guide
 
 ## Quick Start
 
 ```bash
 pip install -e .                    # Install compiler + `lat` CLI
 # OR
-docker build -t latinium .           # Build compiler + VM in container
+docker build -t openlatinum .           # Build compiler + VM in container
 ```
 
 ## Build the VM (Required)

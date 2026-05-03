@@ -1,6 +1,4 @@
-import sys
-
-from lat import compiler_error, compiler_note, std_message
+from lat.utils.errors import compiler_error, compiler_note, std_message, CompilationError
 
 
 class Primary:
@@ -50,13 +48,9 @@ class Primary:
         """
         id_meta, in_function, _ = p.parser.current_scope.get(p[1])  # Get the metadata of the variable
         if id_meta is None:  # If the variable is not declared, Throw an error
-            compiler_error(p, 1, f"Variable {p[1]} not declared")
-            compiler_note("Called from Primary.id")
-            sys.exit(1)
+            raise CompilationError(f"Variable {p[1]} not declared")
         if not id_meta.p_init:
-            compiler_error(p, 1, f"Using non initialized pointer '{p[1]}'")
-            compiler_note("Called from Primary.id")
-            sys.exit(1)
+            raise CompilationError(f"Using non initialized pointer '{p[1]}'")
 
         push_op = "PUSHGP" if not in_function else "PUSHFP"  # If the variable is in a function, push the frame pointer else push the global pointer
         if id_meta.type.startswith("vec"):
@@ -72,13 +66,9 @@ class Primary:
         """
         id_meta, in_function, _ = p.parser.current_scope.get(p[2])
         if id_meta is None:  # If the variable is not declared, Throw an error
-            compiler_error(p, 2, f"Variable {p[2]} not declared")
-            compiler_note("Called from Primary._ref")
-            sys.exit(1)
+            raise CompilationError(f"Variable {p[2]} not declared")
         if id_meta.type.startswith("&") or id_meta.type.startswith("vec"):
-            compiler_error(p, 1, f"Pointer to pointer not supported")
-            compiler_note("Called from Primary._ref")
-            sys.exit(1)
+            raise CompilationError(f"Pointer to pointer not supported")
         p.parser.type_checker.push(f"&{id_meta.type}")
 
         push_op = "PUSHGP" if not in_function else "PUSHFP"  # If the variable is in a function, push the frame pointer else push the global pointer
@@ -90,25 +80,15 @@ class Primary:
         """
         id_meta, in_function, _ = p.parser.current_scope.get(p[1])  # Get the metadata of the variable
         if id_meta is None:  # If the variable is not declared, Throw an error
-            compiler_error(p, 1, f"Variable {p[1]} not declared")
-            compiler_note("Called from Primary._indexing")
-            sys.exit(1)
+            raise CompilationError(f"Variable {p[1]} not declared")
         if not id_meta.type.startswith("vec") and not id_meta.type.startswith("&"):
-            compiler_error(p, 1, f"Can't index into variable of type '{id_meta.type}'")
-            compiler_note("Called from Primary._indexing")
-            sys.exit(1)
+            raise CompilationError(f"Can't index into variable of type '{id_meta.type}'")
         if not id_meta.p_init:
-            compiler_error(p, 1, f"Indexing into non initialized pointer '{p[1]}'")
-            compiler_note("Called from Primary._indexing")
-            sys.exit(1)
+            raise CompilationError(f"Indexing into non initialized pointer '{p[1]}'")
         if len(p.parser.indexing_depth[-1]) > 1 and id_meta.type.startswith("&"):
-            compiler_error(p, 1, f"Can't index pointer with more than one dimension")
-            compiler_note("Called from Primary._indexing")
-            sys.exit(1)
+            raise CompilationError(f"Can't index pointer with more than one dimension")
         if id_meta.array_shape and len(p.parser.indexing_depth[-1]) > len(id_meta.array_shape):
-            compiler_error(p, 1, f"Indexing into dimension {len(p.parser.indexing_depth[-1])} of array {p[1]} of dimension {len(id_meta.array_shape)}")
-            compiler_note("Called from Primary._indexing")
-            sys.exit(1)
+            raise CompilationError(f"Indexing into dimension {len(p.parser.indexing_depth[-1])} of array {p[1]} of dimension {len(id_meta.array_shape)}")
 
         push_op = "PUSHGP" if not in_function else "PUSHFP"  # If the variable is in a function, push the frame pointer else push the global pointer
         if id_meta.type.startswith("vec"): # If the variable is an array
@@ -138,9 +118,7 @@ class Primary:
         """
         idx = p.parser.type_checker.pop()
         if idx != "integer":
-            compiler_error(p, 1, f"Index must be an integer, not {idx}")
-            compiler_note("Called from Primary._array_indexing_depth")
-            sys.exit(1)
+            raise CompilationError(f"Index must be an integer, not {idx}")
 
         if len(p) == 5:
             p.parser.indexing_depth[-1].append(p[3])

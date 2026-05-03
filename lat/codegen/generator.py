@@ -1,10 +1,9 @@
-import sys
 import re
 from typing import List, Optional, Dict, Tuple
 from dataclasses import dataclass, field
 
 from lat.ast import nodes
-from lat.utils.errors import compiler_error, compiler_note
+from lat.utils.errors import compiler_error, compiler_note, CompilationError
 from lat.utils.errors import std_message
 
 
@@ -51,7 +50,7 @@ class CodeGenerator:
         self.type_stack: List[str] = []
         self.label_counter = 0
         self.loop_count = 0
-        self.loop_stack: List[str] = []
+        self.loop_stack: List[Tuple[str, str]] = []
         self.current_function: Optional[nodes.Function] = None
         
     def new_label(self, prefix: str = "L") -> str:
@@ -97,31 +96,89 @@ class CodeGenerator:
         
         return globals_code + main_code + funcs_code
     
+    def _count_locals(self, stmt) -> int:
+        count = 0
+        if isinstance(stmt, nodes.Decl):
+            if stmt.type.startswith("vec<"):
+                if stmt.value and isinstance(stmt.value, nodes.ArrayRange):
+                    count = stmt.value.end - stmt.value.start
+                elif stmt.value and isinstance(stmt.value, nodes.ArrayLiteral):
+                    count = len(stmt.value.items)
+                else:
+                    count = _parse_array_size(stmt.type)
+            else:
+                count = 1
+        elif isinstance(stmt, nodes.If):
+            for s in stmt.then_body:
+                count += self._count_locals(s)
+            if stmt.else_body:
+                if isinstance(stmt.else_body, list):
+                    for s in stmt.else_body:
+                        count += self._count_locals(s)
+                elif isinstance(stmt.else_body, nodes.If):
+                    count += self._count_locals(stmt.else_body)
+                else:
+                    count += self._count_locals(stmt.else_body)
+        elif isinstance(stmt, nodes.While):
+            for s in stmt.body:
+                count += self._count_locals(s)
+        elif isinstance(stmt, nodes.DoWhile):
+            for s in stmt.body:
+                count += self._count_locals(s)
+        elif isinstance(stmt, nodes.For):
+            for init in stmt.init:
+                if init:
+                    count += self._count_locals(init)
+            for s in stmt.body:
+                count += self._count_locals(s)
+            for update in stmt.update:
+                if update:
+                    count += self._count_locals(update)
+        elif isinstance(stmt, nodes.Match):
+            for case in stmt.cases:
+                if isinstance(case, nodes.Case):
+                    for s in case.body:
+                        count += self._count_locals(s)
+                elif isinstance(case, nodes.Default):
+                    for s in case.body:
+                        count += self._count_locals(s)
+        return count
+
     def gen_function(self, func: nodes.Function) -> str:
         self.current_function = func
         label = func.name.replace('_', '')
         
-
         func_scope = Scope(parent=self.current_scope, is_function=True, function_name=func.name)
         self.current_scope = func_scope
         self.frame_count = 0
         
-
+        for i, param in enumerate(func.params):
+            orig_pos = -(len(func.params) - i)
+            local_pos = i
+            var = VarInfo(name=param.name, type=param.type, stack_pos=local_pos, is_global=False, base_pos=orig_pos)
+            func_scope.add(var)
+            self.frame_count += 1
+        
+        local_count = self.frame_count
+        for stmt in func.body:
+            local_count += self._count_locals(stmt)
+        
+        self.current_scope = func_scope
+        self.frame_count = 0
+        
         param_code = ""
         for i, param in enumerate(func.params):
             orig_pos = -(len(func.params) - i)
             local_pos = i
             var = VarInfo(name=param.name, type=param.type, stack_pos=local_pos, is_global=False, base_pos=orig_pos)
             func_scope.add(var)
-            param_code += f"PUSHI 0\nPUSHFP\nLOAD {orig_pos}\nSTOREL {local_pos}\n"
+            param_code += f"PUSHFP\nLOAD {orig_pos}\nSTOREL {local_pos}\n"
             self.frame_count += 1
         
-
         body_code = ""
         for stmt in func.body:
             body_code += self.gen_stmt(stmt)
         
-
         if func.return_type is None:
             if not body_code.strip().endswith("RETURN"):
                 body_code += "RETURN\n"
@@ -129,7 +186,7 @@ class CodeGenerator:
         self.current_scope = func_scope.parent
         self.current_function = None
         
-        return f"{label}:\n{param_code}{body_code}"
+        return f"{label}:\nPUSHN {local_count}\n{param_code}{body_code}"
     
     def gen_stmt(self, stmt) -> str:
         if isinstance(stmt, nodes.Decl):
@@ -165,16 +222,17 @@ class CodeGenerator:
     
     def gen_decl(self, decl: nodes.Decl) -> str:
         if decl.name in self.current_scope.variables:
-            compiler_error(None, 1, f"Variable {decl.name} is already defined")
+            msg = f"Variable {decl.name} is already defined"
+            compiler_error(None, 1, msg)
             compiler_note("Called from CodeGenerator.gen_decl")
-            sys.exit(1)
+            raise CompilationError(msg)
         
         is_global = self.current_scope.parent is None
         
         if decl.type.startswith("vec<"):
 
             if decl.value and isinstance(decl.value, nodes.ArrayRange):
-                size = decl.value.end - decl.value.start
+                size = decl.value.end - decl.value.start + 1
                 array_shape = [size]
             elif decl.value and isinstance(decl.value, nodes.ArrayLiteral):
                 size = len(decl.value.items)
@@ -193,16 +251,20 @@ class CodeGenerator:
                 self.frame_count += size
             
             code = ""
+            
             if decl.value and isinstance(decl.value, nodes.ArrayLiteral):
-                for item in decl.value.items:
+                for i, item in enumerate(decl.value.items):
+                    push_op = "PUSHGP" if is_global else "PUSHFP"
+                    code += f"{push_op}\nPUSHI {pos}\nPUSHI {i}\nPADD\n"
                     code += self.gen_expr(item)
                     self.pop_type()
-            elif decl.type.startswith("vec<integer>"):
-                code += f"PUSHN {size}\n"
-            elif decl.type.startswith("vec<float>"):
-                code += "\n".join(["PUSHF 0.0"] * size) + "\n" if size > 0 else ""
-            elif decl.type.startswith("vec<filum>"):
-                code += "\n".join(["PUSHS ''"] * size) + "\n" if size > 0 else ""
+                    code += "STORE 0\n"
+            elif decl.value and isinstance(decl.value, nodes.ArrayRange):
+                for i in range(size):
+                    push_op = "PUSHGP" if is_global else "PUSHFP"
+                    val = decl.value.start + i
+                    code += f"{push_op}\nPUSHI {pos}\nPUSHI {i}\nPADD\nPUSHI {val}\nSTORE 0\n"
+            
             return code
         
         elif decl.type.startswith("&"):
@@ -216,8 +278,15 @@ class CodeGenerator:
             else:
                 self.frame_count += 1
             
-            push_op = "PUSHGP" if is_global else "PUSHFP"
-            return f"{push_op}\nPUSHI {pos}\nPADD\n"
+            code = ""
+            if decl.value:
+                code += self.gen_expr(decl.value)
+                self.pop_type()
+                code += self.gen_store(var)
+            else:
+                push_op = "PUSHGP" if is_global else "PUSHFP"
+                code += f"{push_op}\nPUSHI {pos}\nPADD\n"
+            return code
         else:
 
             pos = self.global_count if is_global else self.frame_count
@@ -241,6 +310,7 @@ class CodeGenerator:
                 elif decl.type == "filum":
                     code += "PUSHS ''\n"
             
+            code += self.gen_store(var)
             return code
     
     def gen_store(self, var: VarInfo) -> str:
@@ -260,19 +330,24 @@ class CodeGenerator:
             code = self.gen_expr(assign.value)
             var = self.current_scope.get(assign.target.name)
             if var is None:
-                compiler_error(None, 1, f"Variable {assign.target.name} not declared")
+                msg = f"Variable {assign.target.name} not declared"
+                compiler_error(None, 1, msg)
                 compiler_note("Called from CodeGenerator.gen_assignment")
-                sys.exit(1)
+                raise CompilationError(msg)
             code += self.gen_store(var)
         elif isinstance(assign.target, nodes.ArrayIndex):
             var = self.current_scope.get(assign.target.name)
             if var is None:
-                compiler_error(None, 1, f"Variable {assign.target.name} not declared")
+                msg = f"Variable {assign.target.name} not declared"
+                compiler_error(None, 1, msg)
                 compiler_note("Called from CodeGenerator.gen_assignment")
-                sys.exit(1)
+                raise CompilationError(msg)
             
             push_op = "PUSHGP" if var.is_global else "PUSHFP"
-            code = f"{push_op}\nPUSHI {var.stack_pos}\nPADD\n"
+            if var.type.startswith("&"):
+                code = f"{push_op}\nLOAD {var.stack_pos}\n"
+            else:
+                code = f"{push_op}\nPUSHI {var.stack_pos}\nPADD\n"
             for idx in assign.target.indices:
                 code += self.gen_expr(idx)
                 code += "PADD\n"
@@ -332,9 +407,6 @@ class CodeGenerator:
         for stmt in if_stmt.then_body:
             code += self.gen_stmt(stmt)
         
-        num_popped = self.frame_count - prev_frame
-        if num_popped > 0:
-            code += f"POP {num_popped}\n"
         self.frame_count = prev_frame
         self.current_scope = then_scope.parent
         
@@ -354,9 +426,6 @@ class CodeGenerator:
             else:
                 code += self.gen_stmt(if_stmt.else_body)
             
-            num_popped = self.frame_count - prev_frame
-            if num_popped > 0:
-                code += f"POP {num_popped}\n"
             self.frame_count = prev_frame
             self.current_scope = else_scope.parent
         
@@ -365,7 +434,7 @@ class CodeGenerator:
     
     def gen_while(self, while_stmt: nodes.While) -> str:
         start_label, end_label, next_label = self.new_loop_labels()
-        self.loop_stack.append(end_label)
+        self.loop_stack.append((end_label, next_label))
         
         loop_scope = Scope(parent=self.current_scope)
         self.current_scope = loop_scope
@@ -378,13 +447,10 @@ class CodeGenerator:
         for stmt in while_stmt.body:
             code += self.gen_stmt(stmt)
         
-        code += f"NEXTLOOP{self.loop_count}:\n"
+        code += f"{next_label}:\n"
         code += f"JUMP {start_label}\n"
         code += f"{end_label}:\n"
         
-        num_popped = self.frame_count - prev_frame_count
-        if num_popped > 0:
-            code += f"POP {num_popped}\n"
         self.frame_count = prev_frame_count
         
         self.current_scope = loop_scope.parent
@@ -393,7 +459,7 @@ class CodeGenerator:
     
     def gen_do_while(self, do_while: nodes.DoWhile) -> str:
         start_label, end_label, next_label = self.new_loop_labels()
-        self.loop_stack.append(end_label)
+        self.loop_stack.append((end_label, next_label))
         
         loop_scope = Scope(parent=self.current_scope)
         self.current_scope = loop_scope
@@ -403,15 +469,12 @@ class CodeGenerator:
         for stmt in do_while.body:
             code += self.gen_stmt(stmt)
         
-        code += f"NEXTLOOP{self.loop_count}:\n"
+        code += f"{next_label}:\n"
         code += self.gen_expr(do_while.condition)
         code += f"JZ {end_label}\n"
         code += f"JUMP {start_label}\n"
         code += f"{end_label}:\n"
         
-        num_popped = self.frame_count - prev_frame_count
-        if num_popped > 0:
-            code += f"POP {num_popped}\n"
         self.frame_count = prev_frame_count
         
         self.current_scope = loop_scope.parent
@@ -420,7 +483,7 @@ class CodeGenerator:
     
     def gen_for(self, for_stmt: nodes.For) -> str:
         start_label, end_label, next_label = self.new_loop_labels()
-        self.loop_stack.append(end_label)
+        self.loop_stack.append((end_label, next_label))
         
         loop_scope = Scope(parent=self.current_scope)
         self.current_scope = loop_scope
@@ -438,16 +501,13 @@ class CodeGenerator:
         for stmt in for_stmt.body:
             code += self.gen_stmt(stmt)
         
-        code += f"NEXTLOOP{self.loop_count}:\n"
+        code += f"{next_label}:\n"
         for update in for_stmt.update:
             code += self.gen_stmt(update)
         
         code += f"JUMP {start_label}\n"
         code += f"{end_label}:\n"
         
-        num_popped = self.frame_count - prev_frame_count
-        if num_popped > 0:
-            code += f"POP {num_popped}\n"
         self.frame_count = prev_frame_count
         
         self.current_scope = loop_scope.parent
@@ -474,9 +534,6 @@ class CodeGenerator:
                 for stmt in case.body:
                     code += self.gen_stmt(stmt)
                 
-                num_popped = self.frame_count - prev_frame
-                if num_popped > 0:
-                    code += f"POP {num_popped}\n"
                 self.frame_count = prev_frame
                 self.current_scope = case_scope.parent
                 
@@ -490,9 +547,6 @@ class CodeGenerator:
                 for stmt in case.body:
                     code += self.gen_stmt(stmt)
                 
-                num_popped = self.frame_count - prev_frame
-                if num_popped > 0:
-                    code += f"POP {num_popped}\n"
                 self.frame_count = prev_frame
                 self.current_scope = default_scope.parent
         
@@ -511,24 +565,27 @@ class CodeGenerator:
     
     def gen_break(self) -> str:
         if not self.loop_stack:
-            compiler_error(None, 1, "'break' statement not allowed outside of a loop")
+            msg = "'break' statement not allowed outside of a loop"
+            compiler_error(None, 1, msg)
             compiler_note("Called from CodeGenerator.gen_break")
-            sys.exit(1)
-        return f"JUMP {self.loop_stack[-1]}\n"
+            raise CompilationError(msg)
+        return f"JUMP {self.loop_stack[-1][0]}\n"
     
     def gen_continue(self) -> str:
         if not self.loop_stack:
-            compiler_error(None, 1, "'continue' statement not allowed outside of a loop")
+            msg = "'continue' statement not allowed outside of a loop"
+            compiler_error(None, 1, msg)
             compiler_note("Called from CodeGenerator.gen_continue")
-            sys.exit(1)
-        return f"JUMP {self.loop_stack[-1]}\n"
+            raise CompilationError(msg)
+        return f"JUMP {self.loop_stack[-1][1]}\n"
     
     def gen_function_call(self, call: nodes.FunctionCall) -> str:
         func = self.functions.get(call.name)
         if func is None:
-            compiler_error(None, 1, f"Function {call.name} not declared")
+            msg = f"Function {call.name} not declared"
+            compiler_error(None, 1, msg)
             compiler_note("Called from CodeGenerator.gen_function_call")
-            sys.exit(1)
+            raise CompilationError(msg)
         
         code = ""
         if func.return_type:
@@ -566,10 +623,17 @@ class CodeGenerator:
         elif isinstance(expr, nodes.Identifier):
             var = self.current_scope.get(expr.name)
             if var is None:
-                compiler_error(None, 1, f"Variable {expr.name} not declared")
+                msg = f"Variable {expr.name} not declared"
+                compiler_error(None, 1, msg)
                 compiler_note("Called from CodeGenerator.gen_expr")
-                sys.exit(1)
-            self.push_type(var.type)
+                raise CompilationError(msg)
+            t = var.type
+            if t.startswith("vec<"):
+                t = "&" + t[4:t.index(">")]
+                self.push_type(t)
+                push_op = "PUSHGP" if var.is_global else "PUSHFP"
+                return f"{push_op}\nPUSHI {var.stack_pos}\nPADD\n"
+            self.push_type(t)
             return self.gen_load(var)
         elif isinstance(expr, nodes.BinaryOp):
             return self.gen_binary_op(expr)
@@ -590,13 +654,47 @@ class CodeGenerator:
             return ""
     
     def gen_binary_op(self, expr: nodes.BinaryOp) -> str:
+        op = expr.op
+        
+        if op == 'AND':
+            code = self.gen_expr(expr.left)
+            left_type = self.pop_type()
+            self.push_type(left_type)
+            count = self.label_counter
+            self.label_counter += 1
+            code += f"DUP 1\nJZ AND{count}END\nPOP 1\n"
+            code += self.gen_expr(expr.right)
+            self.pop_type()
+            self.push_type("integer")
+            code += f"AND{count}END:\n"
+            return code
+        elif op == 'OR':
+            code = self.gen_expr(expr.left)
+            left_type = self.pop_type()
+            self.push_type(left_type)
+            count = self.label_counter
+            self.label_counter += 1
+            code += f"DUP 1\nJZ OR{count}RIGHT\nPOP 1\nJUMP OR{count}END\nOR{count}RIGHT:\nPOP 1\n"
+            code += self.gen_expr(expr.right)
+            self.pop_type()
+            self.push_type("integer")
+            code += f"OR{count}END:\n"
+            return code
+        
         code = self.gen_expr(expr.left)
         code += self.gen_expr(expr.right)
         
-        left_type = self.pop_type()
         right_type = self.pop_type()
+        left_type = self.pop_type()
         
-        op = expr.op
+        def is_ptr(t):
+            return t.startswith("&") or t.startswith("vec<")
+        
+        def ptr_type(t):
+            if t.startswith("vec<"):
+                return "&" + t[4:t.index(">")]
+            return t
+        
         if op == '+':
             if left_type == right_type == "integer":
                 self.push_type("integer")
@@ -607,8 +705,8 @@ class CodeGenerator:
             elif left_type == right_type == "filum":
                 self.push_type("filum")
                 code += "CONCAT\n"
-            elif left_type.startswith("&") and right_type == "integer":
-                self.push_type(left_type)
+            elif is_ptr(left_type) and right_type == "integer":
+                self.push_type(ptr_type(left_type))
                 code += "PADD\n"
         elif op == '-':
             if left_type == right_type == "integer":
@@ -617,8 +715,8 @@ class CodeGenerator:
             elif left_type == right_type == "float":
                 self.push_type("float")
                 code += "FSUB\n"
-            elif left_type.startswith("&") and right_type == "integer":
-                self.push_type(left_type)
+            elif is_ptr(left_type) and right_type == "integer":
+                self.push_type(ptr_type(left_type))
                 code += "PUSHI -1\nMUL\nPADD\n"
         elif op == '*':
             if left_type == right_type == "integer":
@@ -642,8 +740,14 @@ class CodeGenerator:
             if left_type == right_type and left_type != "filum":
                 self.push_type("integer")
                 code += "EQUAL\n"
+            elif is_ptr(left_type) and is_ptr(right_type):
+                self.push_type("integer")
+                code += "EQUAL\n"
         elif op == 'NEQ':
             if left_type == right_type and left_type != "filum":
+                self.push_type("integer")
+                code += "EQUAL\nNOT\n"
+            elif is_ptr(left_type) and is_ptr(right_type):
                 self.push_type("integer")
                 code += "EQUAL\nNOT\n"
         elif op == 'LT':
@@ -653,6 +757,9 @@ class CodeGenerator:
             elif left_type == right_type == "float":
                 self.push_type("integer")
                 code += "FINF\nFTOI\n"
+            elif is_ptr(left_type) and is_ptr(right_type):
+                self.push_type("integer")
+                code += "INF\n"
         elif op == 'GT':
             if left_type == right_type and left_type not in ("filum", "float"):
                 self.push_type("integer")
@@ -660,6 +767,9 @@ class CodeGenerator:
             elif left_type == right_type == "float":
                 self.push_type("integer")
                 code += "FSUP\nFTOI\n"
+            elif is_ptr(left_type) and is_ptr(right_type):
+                self.push_type("integer")
+                code += "SUP\n"
         elif op == 'LTE':
             if left_type == right_type and left_type not in ("filum", "float"):
                 self.push_type("integer")
@@ -667,6 +777,9 @@ class CodeGenerator:
             elif left_type == right_type == "float":
                 self.push_type("integer")
                 code += "FINFEQ\nFTOI\n"
+            elif is_ptr(left_type) and is_ptr(right_type):
+                self.push_type("integer")
+                code += "INFEQ\n"
         elif op == 'GTE':
             if left_type == right_type and left_type not in ("filum", "float"):
                 self.push_type("integer")
@@ -674,22 +787,9 @@ class CodeGenerator:
             elif left_type == right_type == "float":
                 self.push_type("integer")
                 code += "FSUPEQ\nFTOI\n"
-        elif op == 'AND':
-            if left_type == right_type == "integer":
+            elif is_ptr(left_type) and is_ptr(right_type):
                 self.push_type("integer")
-                count = self.label_counter
-                self.label_counter += 1
-                code += f"DUP 1\nJZ AND{count}END\nPOP 1\n"
-                code += self.gen_expr(expr.right)
-                code += f"AND{count}END:\n"
-        elif op == 'OR':
-            if left_type == right_type == "integer":
-                self.push_type("integer")
-                count = self.label_counter
-                self.label_counter += 1
-                code += f"DUP 1\nJZ OR{count}RIGHT\nJUMP OR{count}END\nOR{count}RIGHT:\nPOP 1\n"
-                code += self.gen_expr(expr.right)
-                code += f"OR{count}END:\n"
+                code += "SUPEQ\n"
         
         return code
     
@@ -714,9 +814,10 @@ class CodeGenerator:
     def gen_array_index(self, expr: nodes.ArrayIndex) -> str:
         var = self.current_scope.get(expr.name)
         if var is None:
-            compiler_error(None, 1, f"Variable {expr.name} not declared")
+            msg = f"Variable {expr.name} not declared"
+            compiler_error(None, 1, msg)
             compiler_note("Called from CodeGenerator.gen_array_index")
-            sys.exit(1)
+            raise CompilationError(msg)
         
         push_op = "PUSHGP" if var.is_global else "PUSHFP"
         
@@ -730,7 +831,7 @@ class CodeGenerator:
             code += "PADD\n"
         
         if var.type.startswith("vec<"):
-            elem_type = var.type[4:-1]
+            elem_type = var.type[4:var.type.index(">")]
             self.push_type(elem_type)
         elif var.type.startswith("&"):
             elem_type = var.type[1:]
@@ -744,9 +845,10 @@ class CodeGenerator:
     def gen_ref(self, expr: nodes.Ref) -> str:
         var = self.current_scope.get(expr.name)
         if var is None:
-            compiler_error(None, 1, f"Variable {expr.name} not declared")
+            msg = f"Variable {expr.name} not declared"
+            compiler_error(None, 1, msg)
             compiler_note("Called from CodeGenerator.gen_ref")
-            sys.exit(1)
+            raise CompilationError(msg)
         
         push_op = "PUSHGP" if var.is_global else "PUSHFP"
         self.push_type(f"&{var.type}")

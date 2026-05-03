@@ -168,8 +168,9 @@ class IRGenerator:
                 t = self._new_temp("integer")
                 self._emit(BinOp("==", expr, case_val, t))
                 next_label = self._new_label("nextcase")
-                self._emit(Branch(t, self._new_label(f"case{i}"), next_label))
-                self._add_block(f"case{i}")
+                case_label = f"case{i}"
+                self._emit(Branch(t, case_label, next_label))
+                self._add_block(case_label)
                 for s in case.body:
                     self._gen_stmt(s)
                 self._emit(Jump(end_label))

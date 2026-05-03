@@ -12,7 +12,7 @@ from lat.utils.colors import *
 OptArgs = Dict[str, str]
 ReqArgs = Dict[str, Union[str, bool]]
 possible_exec_modes = ["run", "build", "test", "euler", "examples"]
-possible_opt_args = ["-o", "--output", "-v", "--verbose", "-rec", "--record", "-clc", "--clean-up", "--ast", "--check", "--ir"]
+possible_opt_args = ["-o", "--output", "-v", "--verbose", "-rec", "--record", "-clc", "--clean-up", "--ast", "--check", "--ir", "--opt"]
 recognized_args = possible_exec_modes + possible_opt_args
 
 
@@ -91,11 +91,12 @@ def prepare_cmd_args() -> Tuple[OptArgs, ReqArgs]:
     use_ast = True if "--ast" in sys.argv else False
     check_only = True if "--check" in sys.argv else False
     use_ir = True if "--ir" in sys.argv else False
+    use_opt = True if "--opt" in sys.argv else False
 
     if verbose:
         warn_cmd("Verbose output is not implemented yet.")
 
-    opt_args = {"-o": output_file, "-v": verbose, "-rec": rec, "-clc": clc, "--ast": use_ast, "--check": check_only, "--ir": use_ir}
+    opt_args = {"-o": output_file, "-v": verbose, "-rec": rec, "-clc": clc, "--ast": use_ast, "--check": check_only, "--ir": use_ir, "--opt": use_opt}
 
     # Handle Required Arguments
     run = True if "run" in sys.argv else False
@@ -151,6 +152,10 @@ def build_execute(req_args: ReqArgs, opt_args: OptArgs):
                 from lat.codegen.from_ir import IRCodeGenerator
                 ir_gen = IRGenerator()
                 ir_program = ir_gen.generate(program)
+                if opt_args.get("--opt"):
+                    from lat.ir.optimizer import IROptimizer
+                    optimizer = IROptimizer()
+                    ir_program = optimizer.optimize(ir_program)
                 codegen = IRCodeGenerator()
                 output = codegen.generate(ir_program)
             else:

@@ -180,3 +180,8 @@ review_import*.json
 results/
 scorecard.png
 .claude/
+
+
+# Added by cargo
+
+/target

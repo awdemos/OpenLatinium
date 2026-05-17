@@ -1,0 +1,6 @@
+// Test: Undefined variable
+// Expected error: Undeclared variable 'y'
+
+munus main() {
+    x: integer = y
+}

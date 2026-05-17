@@ -20,11 +20,11 @@ BINARY_OPS: Dict[str, str] = {
     "<=": "INFEQ",
     ">=": "SUPEQ",
     "==": "EQUAL",
-    "!=": "NOT\nEQUAL",
+    "!=": "EQUAL\nNOT",
     "&&": "AND",
     "||": "OR",
     "EQ": "EQUAL",
-    "NEQ": "NOT\nEQUAL",
+    "NEQ": "EQUAL\nNOT",
     "LT": "INF",
     "GT": "SUP",
     "LTE": "INFEQ",
@@ -116,7 +116,10 @@ class BytecodeEmitter:
     def emit_binop(self, op: str) -> None:
         """Emit a binary operator instruction."""
         vm_op = BINARY_OPS.get(op, op.upper())
-        self.emit(vm_op)
+        if "\n" in vm_op:
+            self.emit_lines(vm_op)
+        else:
+            self.emit(vm_op)
 
     def emit_unaryop(self, op: str) -> None:
         """Emit a unary operator instruction sequence."""
@@ -136,8 +139,10 @@ class BytecodeEmitter:
     def emit_main_entry(self) -> None:
         """Emit the standard program entry sequence."""
         self.emit("start")
+        self.emit("PUSHI 0")
         self.emit("PUSHA main")
         self.emit("CALL")
+        self.emit("POP 1")
         self.emit("stop")
 
     def emit_function_prologue(

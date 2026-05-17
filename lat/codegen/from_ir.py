@@ -1,3 +1,4 @@
+import re
 from typing import List, Optional, Dict
 
 from lat.ir.nodes import (
@@ -18,6 +19,7 @@ class IRCodeGenerator:
         self.frame_count = 0
         self.locals: Dict[str, int] = {}
         self.params: Dict[str, int] = {}
+        self.functions: Dict[str, IRFunction] = {}
 
     def generate(self, program: IRProgram) -> str:
         self.emitter = BytecodeEmitter()
@@ -28,6 +30,13 @@ class IRCodeGenerator:
             self.globals[g.name] = self.global_count
             self.global_count += 1
             self.emitter.emit("PUSHN 1")
+            # Initialize global arrays with heap allocation
+            if g.type.startswith("vec<"):
+                m = re.search(r'\[(\d+)\]', g.type)
+                size = int(m.group(1)) if m else 1
+                self.emitter.emit(f"PUSHI {size}")
+                self.emitter.emit("ALLOCN")
+                self.emitter.emit(f"STOREG {self.globals[g.name]}")
 
         self.emitter.emit_main_entry()
 
@@ -38,6 +47,7 @@ class IRCodeGenerator:
 
     def _gen_function(self, func: IRFunction):
         self.current_function = func.name
+        self.functions[func.name] = func
         self.frame_count = 0
         self.locals = {}
         self.params = {}
@@ -49,11 +59,12 @@ class IRCodeGenerator:
             self.locals[local.name] = self.frame_count
             self.frame_count += 1
 
+        label = func.name.replace('_', '')
         self.emitter.emit_function_prologue(
-            func.name,
+            label,
             self.frame_count,
             len(func.params),
-            params_to_locals=bool(func.params),
+            params_to_locals=False,
         )
 
         for block in func.blocks:
@@ -125,9 +136,52 @@ class IRCodeGenerator:
         self.emitter.emit_store(instr.scope, pos)
 
     def _gen_binop(self, instr: BinOp):
-        self._gen_operand(instr.left)
-        self._gen_operand(instr.right)
-        self.emitter.emit_binop(instr.op)
+        def is_ptr_type(t):
+            return isinstance(t, str) and (t.startswith('vec<') or t.startswith('&'))
+        
+        left_is_ptr = isinstance(instr.left, (Var, Temp)) and is_ptr_type(getattr(instr.left, 'type', ''))
+        right_is_ptr = isinstance(instr.right, (Var, Temp)) and is_ptr_type(getattr(instr.right, 'type', ''))
+        
+        if instr.op == '+' and left_is_ptr and not right_is_ptr:
+            self._gen_operand(instr.left)
+            self._gen_operand(instr.right)
+            self.emitter.emit("PADD")
+        elif instr.op == '-' and left_is_ptr and not right_is_ptr:
+            self._gen_operand(instr.left)
+            self._gen_operand(instr.right)
+            self.emitter.emit("PUSHI -1")
+            self.emitter.emit("MUL")
+            self.emitter.emit("PADD")
+        elif instr.op == '+' and hasattr(instr.result, 'type') and instr.result.type == 'filum':
+            self._gen_operand(instr.left)
+            self._gen_operand(instr.right)
+            if isinstance(instr.left, Const) and isinstance(instr.right, Temp):
+                self.emitter.emit("SWAP")
+            self.emitter.emit("CONCAT")
+        elif instr.op == '-' and hasattr(instr.result, 'type') and instr.result.type == 'filum':
+            self._gen_operand(instr.left)
+            self._gen_operand(instr.right)
+            if isinstance(instr.left, Const) and isinstance(instr.right, Temp):
+                self.emitter.emit("SWAP")
+            self.emitter.emit("SSUB")
+        elif instr.op == '*' and hasattr(instr.result, 'type') and instr.result.type == 'filum':
+            self._gen_operand(instr.left)
+            self._gen_operand(instr.right)
+            if isinstance(instr.left, Const) and isinstance(instr.right, Temp):
+                self.emitter.emit("SWAP")
+            self.emitter.emit("SMUL")
+        elif instr.op == '==' and hasattr(instr.result, 'type') and instr.result.type == 'filum':
+            self._gen_operand(instr.left)
+            self._gen_operand(instr.right)
+            if isinstance(instr.left, Const) and isinstance(instr.right, Temp):
+                self.emitter.emit("SWAP")
+            self.emitter.emit("SEQ")
+        else:
+            self._gen_operand(instr.left)
+            self._gen_operand(instr.right)
+            if isinstance(instr.right, Temp) and not isinstance(instr.left, Temp):
+                self.emitter.emit("SWAP")
+            self.emitter.emit_binop(instr.op)
 
     def _gen_unaryop(self, instr: UnaryOp):
         self._gen_operand(instr.operand)
@@ -135,28 +189,43 @@ class IRCodeGenerator:
 
     def _gen_arrayload(self, instr: ArrayLoad):
         self._gen_operand(instr.base)
+        if isinstance(instr.index, Temp):
+            self.emitter.emit("SWAP")
         self._gen_operand(instr.index)
+        self.emitter.emit("PADD")
         self.emitter.emit("LOAD 0")
 
     def _gen_arraystore(self, instr: ArrayStore):
         self._gen_operand(instr.base)
+        if isinstance(instr.index, Temp):
+            self.emitter.emit("SWAP")
         self._gen_operand(instr.index)
+        self.emitter.emit("PADD")
+        if isinstance(instr.value, Temp):
+            self.emitter.emit("SWAP")
         self._gen_operand(instr.value)
         self.emitter.emit("STORE 0")
 
     def _gen_call(self, instr: Call):
+        func = self.functions.get(instr.name)
+        if func and func.return_type:
+            self.emitter.emit("PUSHI -69")
         for arg in instr.args:
             self._gen_operand(arg)
-        self.emitter.emit(f"PUSHA {instr.name}")
+        label = instr.name.replace('_', '')
+        self.emitter.emit(f"PUSHA {label}")
         self.emitter.emit("CALL")
-        if instr.result is None:
-            self.emitter.emit("POP 1")
+        if func and func.params:
+            self.emitter.emit(f"POP {len(func.params)}")
 
     def _gen_return(self, instr: Return):
         if instr.value is not None:
             self._gen_operand(instr.value)
-        else:
-            self.emitter.emit("PUSHI 0")
+            func = self.functions.get(self.current_function)
+            if func and func.params:
+                self.emitter.emit(f"STOREL -{len(func.params) + 1}")
+            else:
+                self.emitter.emit("STOREL -1")
         self.emitter.emit("RETURN")
 
     def _gen_branch(self, instr: Branch):
@@ -174,7 +243,7 @@ class IRCodeGenerator:
 
     def _gen_alloc(self, instr: Alloc):
         self._gen_operand(instr.size)
-        self.emitter.emit("PUSHN 1")
+        self.emitter.emit("ALLOCN")
 
     def _gen_push(self, instr: Push):
         self._gen_operand(instr.value)

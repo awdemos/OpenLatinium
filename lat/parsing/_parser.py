@@ -870,27 +870,37 @@ parser.loop_handler = Loop()
 parser.loop_break_handler = BreakContinue()
 parser.functions_handler = Functions()
 
+def reset_parser():
+    """Reset parser global state to prevent pollution between compilations."""
+    parser.num_params = 0
+    parser.num_args = []
+    parser.frame_count = 0
+    parser.global_count = 0
+    parser.if_count = 0
+    parser.rel_if_count = 0
+    parser.match_count = 0
+    parser.rel_match_count = 0
+    parser.loop_count = 0
+    parser.logic_count = 0
+    parser.current_loops = []
+    parser.array_assign_items = 0
+    parser.indexing_depth = []
+    parser.arr_dim = []
+    parser.current_scope = Scope(name="Global Scope", level=0, parent=None)
+    parser.type_checker = TypeCheck()
+    parser.functions_handler = Functions()
+    parser.io_handler = IO()
+    parser.assignment_handler = Assignment()
+    parser.declaration_handler = Declaration()
+    parser.declaration_assignment_handler = DeclarationAssignment()
+    parser.if_handler = If()
+    parser.match_handler = Match()
+    parser.loop_handler = Loop()
+    parser.loop_break_handler = BreakContinue()
+
+
 # Inicializar variáveis
-parser.num_params = 0
-parser.num_args = []
-parser.frame_count = 0
-parser.global_count = 0
-parser.if_count = 0
-parser.rel_if_count = 0
-parser.match_count = 0
-parser.rel_match_count = 0
-parser.loop_count = 0
-parser.logic_count = 0
-parser.current_loops = []  # This is needed for break and continue statements to be checked
-parser.array_assign_items = 0
-parser.indexing_depth = []
-parser.arr_dim = []
-
-# Inicializar Scope
-parser.current_scope: Scope = Scope(name="Global Scope", level=0, parent=None)
-
-# Inicializar type checker
-parser.type_checker = TypeCheck()
+reset_parser()
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 from __future__ import annotations
 import re
+import sys
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, Tuple
 
@@ -20,6 +21,7 @@ class EWVMPyInterpreter:
         self.sp = 0
         self.fp = 0
         self.gp = 0
+        self.globals: List[Value] = []
         self.pc = 0
         self.call_stack: List[Tuple[int, int]] = []
         self.heap: Dict[int, str] = {}
@@ -32,22 +34,39 @@ class EWVMPyInterpreter:
         self.input_idx = 0
 
     def load(self, source: str):
+        self._raw_code = []
         self.code = []
         for line in source.strip().split('\n'):
             line = line.strip()
             if not line or line.startswith('#'):
                 continue
-            self.code.append(line)
+            self._raw_code.append(line)
         self._resolve_labels()
+        self._preparse_instructions()
+
+    def _preparse_instructions(self):
+        self.code = []
+        for line in self._raw_code:
+            if line.endswith(':'):
+                self.code.append((None, None))
+                continue
+            parts = line.split(None, 1)
+            op = parts[0].upper()
+            arg_str = parts[1] if len(parts) > 1 else ''
+            method = getattr(self, f'_op_{op}', None)
+            if method is None:
+                raise VMError(f"Unknown instruction: {op}")
+            parsed_arg = self._preparse_arg(arg_str)
+            self.code.append((method, parsed_arg))
 
     def _resolve_labels(self):
         self.labels = {}
-        for i, line in enumerate(self.code):
+        for i, line in enumerate(self._raw_code):
             if line.endswith(':'):
                 label = line[:-1]
                 self.labels[label] = i
 
-    def run(self, input_data: str = '', max_steps: int = 100000) -> str:
+    def run(self, input_data: str = '', max_steps: int = 10_000_000) -> str:
         self.input_lines = input_data.split('\n') if input_data else []
         self.input_idx = 0
         self.output = []
@@ -58,40 +77,34 @@ class EWVMPyInterpreter:
         self.call_stack = []
         self.running = True
         steps = 0
+        trace_file = open('/tmp/pyvm_trace.log', 'w')
         while self.running and self.pc < len(self.code):
             if steps >= max_steps:
+                trace_file.close()
                 raise VMError(f"Step limit exceeded ({max_steps})")
             steps += 1
-            line = self.code[self.pc]
+            method, arg = self.code[self.pc]
+            trace_file.write(f"step={steps} pc={self.pc} sp={self.sp} fp={self.fp} instr={self._raw_code[self.pc]}\n")
+            if steps % 10000 == 0:
+                trace_file.flush()
             self.pc += 1
-            self._step(line)
+            if method is not None:
+                method(arg)
+        trace_file.close()
         return ''.join(self.output)
 
-    def _step(self, line: str):
-        if line.endswith(':'):
-            return
-        parts = line.split(None, 1)
-        op = parts[0].upper()
-        arg = parts[1] if len(parts) > 1 else ''
-        method = getattr(self, f'_op_{op}', None)
-        if method is None:
-            raise VMError(f"Unknown instruction: {op}")
-        method(arg)
-
-    def _parse_arg(self, arg: str) -> Any:
+    def _preparse_arg(self, arg: str) -> Any:
         arg = arg.strip()
         if not arg:
             return 0
         if arg.startswith('"') and arg.endswith('"'):
-            return arg[1:-1].encode('utf-8').decode('unicode_escape')
+            return arg
         if arg.startswith("'") and arg.endswith("'"):
             return arg[1:-1]
         if arg.lower() in ('true', 'verum'):
             return 1
         if arg.lower() in ('false', 'falsum'):
             return 0
-        if arg in self.labels:
-            return self.labels[arg]
         try:
             return int(arg)
         except ValueError:
@@ -99,6 +112,13 @@ class EWVMPyInterpreter:
                 return float(arg)
             except ValueError:
                 return arg
+
+    def _parse_arg(self, arg: str) -> Any:
+        if isinstance(arg, (int, float)):
+            return arg
+        if arg in self.labels:
+            return self.labels[arg]
+        return arg
 
     def _push(self, v: Value):
         if self.sp < len(self.stack):
@@ -134,7 +154,7 @@ class EWVMPyInterpreter:
             val = self.input_lines[self.input_idx]
             self.input_idx += 1
             return val
-        return '0'
+        return ''
 
     def _op_START(self, _):
         pass
@@ -175,7 +195,7 @@ class EWVMPyInterpreter:
         self._push(Value('op', self.fp))
 
     def _op_PUSHGP(self, _):
-        self._push(Value('op', self.gp))
+        self._push(Value('gp', 0))
 
     def _op_PUSHSP(self, _):
         self._push(Value('op', self.sp))
@@ -193,6 +213,13 @@ class EWVMPyInterpreter:
                     self._push(Value('float', float(val)))
                 except ValueError:
                     self._push(Value('str', val))
+        elif ptr.type == 'gp':
+            gidx = ptr.val + idx
+            if 0 <= gidx < len(self.globals):
+                v = self.globals[gidx]
+                self._push(Value(v.type, v.val))
+            else:
+                self._push(Value('int', 0))
         elif ptr.type in ('op', 'int', 'float'):
             self._push(self._get(ptr.val + idx))
         else:
@@ -211,6 +238,13 @@ class EWVMPyInterpreter:
                     self._push(Value('float', float(val)))
                 except ValueError:
                     self._push(Value('str', val))
+        elif ptr.type == 'gp':
+            gidx = ptr.val + idx
+            if 0 <= gidx < len(self.globals):
+                v = self.globals[gidx]
+                self._push(Value(v.type, v.val))
+            else:
+                self._push(Value('int', 0))
         elif ptr.type in ('op', 'int', 'float'):
             self._push(self._get(ptr.val + idx))
         else:
@@ -246,6 +280,11 @@ class EWVMPyInterpreter:
         idx = int(self._parse_arg(arg))
         if ptr.type == 'heap':
             self.heap[ptr.val + idx] = str(val.val)
+        elif ptr.type == 'gp':
+            gidx = ptr.val + idx
+            while len(self.globals) <= gidx:
+                self.globals.append(Value('int', 0))
+            self.globals[gidx] = val
         elif ptr.type in ('op', 'int', 'float'):
             self._set(ptr.val + idx, val)
         else:
@@ -257,6 +296,11 @@ class EWVMPyInterpreter:
         ptr = self._pop()
         if ptr.type == 'heap':
             self.heap[ptr.val + idx] = str(val.val)
+        elif ptr.type == 'gp':
+            gidx = ptr.val + idx
+            while len(self.globals) <= gidx:
+                self.globals.append(Value('int', 0))
+            self.globals[gidx] = val
         elif ptr.type in ('op', 'int', 'float'):
             self._set(ptr.val + idx, val)
         else:
@@ -269,8 +313,10 @@ class EWVMPyInterpreter:
 
     def _op_STOREG(self, arg):
         val = self._pop()
-        idx = self.gp + int(self._parse_arg(arg))
-        self._set(idx, val)
+        idx = int(self._parse_arg(arg))
+        while len(self.globals) <= idx:
+            self.globals.append(Value('int', 0))
+        self.globals[idx] = val
 
     def _op_ALLOC(self, arg):
         n = int(self._parse_arg(arg))
@@ -292,6 +338,8 @@ class EWVMPyInterpreter:
         ptr = self._pop()
         if ptr.type == 'heap':
             self._push(Value('heap', ptr.val + offset))
+        elif ptr.type == 'gp':
+            self._push(Value('gp', ptr.val + offset))
         elif ptr.type == 'op':
             self._push(Value('op', ptr.val + offset))
         elif ptr.type == 'code':
@@ -523,6 +571,25 @@ class EWVMPyInterpreter:
         a = str(self._pop().val)
         self._push(Value('str', a + b))
 
+    def _op_SSUB(self, _):
+        b = str(self._pop().val)
+        a = str(self._pop().val)
+        result = ''.join(c for c in a if c not in b)
+        self._push(Value('str', result))
+
+    def _op_SMUL(self, _):
+        b = int(self._pop().val)
+        a = str(self._pop().val)
+        self._push(Value('str', a * b))
+
+    def _op_SEQ(self, _):
+        b_val = self._pop()
+        a_val = self._pop()
+        b = str(b_val.val)
+        a = str(a_val.val)
+        result = 1 if a == b else 0
+        self._push(Value('int', result))
+
     def _op_SWAP(self, _):
         a = self._pop()
         b = self._pop()
@@ -540,7 +607,7 @@ class EWVMPyInterpreter:
         self.output.append(s)
 
 
-def run_bytecode(source: str, input_data: str = '', max_steps: int = 100000) -> str:
+def run_bytecode(source: str, input_data: str = '', max_steps: int = 10_000_000) -> str:
     vm = EWVMPyInterpreter()
     vm.load(source)
     return vm.run(input_data, max_steps)

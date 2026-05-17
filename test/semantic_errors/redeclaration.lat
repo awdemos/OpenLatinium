@@ -1,0 +1,7 @@
+// Test: Variable redeclaration
+// Expected error: Variable 'x' is already defined
+
+munus main() {
+    x: integer = 1
+    x: integer = 2
+}

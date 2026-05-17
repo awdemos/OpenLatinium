@@ -475,6 +475,12 @@ class SemanticAnalyzer:
         return f"vec<{first_type}>"
 
     def visit_array_range(self, rng: ArrayRange) -> Optional[str]:
+        start_type = self.visit_expr(rng.start)
+        end_type = self.visit_expr(rng.end)
+        if start_type is not None and start_type != "integer":
+            self.error(f"Array range start must be 'integer', got '{start_type}'")
+        if end_type is not None and end_type != "integer":
+            self.error(f"Array range end must be 'integer', got '{end_type}'")
         return "vec<integer>"
 
     def visit_if_expr(self, expr: IfExpr) -> Optional[str]:
@@ -512,34 +518,40 @@ class SemanticAnalyzer:
         return func.return_type
 
     def visit_read_expr(self, read_expr: Read) -> Optional[str]:
-        if read_expr.read_type == "read_int":
+        rt = read_expr.read_type
+        if rt in ("read_int", "legerei", "READ_INT"):
             return "integer"
-        elif read_expr.read_type == "read_float":
+        elif rt in ("read_float", "legeref", "READ_FLOAT"):
             return "float"
-        elif read_expr.read_type == "read_string":
+        elif rt in ("read_string", "legeres", "READ_STRING"):
             return "filum"
         else:
             self.error(f"Unknown read type '{read_expr.read_type}'")
             return None
 
     def _extract_vec_inner(self, type_str: str) -> str:
-        if type_str.startswith("vec<") and ">" in type_str:
-            return type_str[4:type_str.index(">")]
-        return type_str
+        stripped = type_str
+        while "[" in stripped:
+            stripped = stripped[:stripped.rindex("[")]
+        if stripped.startswith("vec<") and stripped.endswith(">"):
+            inner = stripped[4:-1]
+            if inner.startswith("vec<"):
+                return self._extract_vec_inner(inner)
+            return inner
+        return stripped
 
     def _is_valid_type(self, type_str: str) -> bool:
         base_types = {"integer", "float", "filum", "boolean"}
-        if type_str in base_types:
+        stripped = type_str
+        while "[" in stripped:
+            stripped = stripped[:stripped.rindex("[")]
+        if stripped in base_types:
             return True
-        if type_str.startswith("&") and type_str[1:] in base_types:
-            return True
-        if type_str.startswith("vec<") and type_str.endswith(">"):
-            inner = type_str[4:-1]
-            return inner in base_types
-        if type_str.startswith("vec<") and ">" in type_str:
-            inner = type_str[4:type_str.index(">")]
-            if inner in base_types:
-                return True
+        if stripped.startswith("&"):
+            return self._is_valid_type(stripped[1:])
+        if stripped.startswith("vec<") and stripped.endswith(">"):
+            inner = stripped[4:-1]
+            return self._is_valid_type(inner)
         return False
 
     def _types_compatible(self, target: str, source: str) -> bool:
@@ -593,6 +605,8 @@ class SemanticAnalyzer:
             return "integer"
         elif left.startswith("vec<") and right.startswith("vec<"):
             return "integer"
+        elif left == right == "filum":
+            return "filum"
         self.error(f"Operation 'sub' not supported for types '{left}' and '{right}'")
         return None
 
@@ -601,6 +615,10 @@ class SemanticAnalyzer:
             return "integer"
         elif left == right == "float":
             return "float"
+        elif left == "filum" and right == "integer":
+            return "filum"
+        elif left == "integer" and right == "filum":
+            return "filum"
         self.error(f"Operation 'mul' not supported for types '{left}' and '{right}'")
         return None
 
@@ -662,13 +680,13 @@ class SemanticAnalyzer:
         return None
 
     def _check_eq(self, left: str, right: str) -> Optional[str]:
-        if left == right and left != "filum":
+        if left == right:
             return "integer"
         self.error(f"Operation 'eq' not supported for types '{left}' and '{right}'")
         return None
 
     def _check_neq(self, left: str, right: str) -> Optional[str]:
-        if left == right and left != "filum":
+        if left == right:
             return "integer"
         self.error(f"Operation 'neq' not supported for types '{left}' and '{right}'")
         return None

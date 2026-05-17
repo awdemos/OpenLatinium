@@ -1,0 +1,13 @@
+[package]
+name = "lat"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+lat-core = { path = "../lat-core" }
+lat-macro = { path = "../lat-macro" }
+
+[dev-dependencies]
+insta = "1"

@@ -1,0 +1,10 @@
+// Test: Function redefinition
+// Expected error: Redefinition of function 'foo'
+
+munus foo() {
+    reditus
+}
+
+munus foo() {
+    reditus
+}

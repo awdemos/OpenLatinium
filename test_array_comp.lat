@@ -1,0 +1,13 @@
+v: vec<integer>[10]
+
+munus sm(x: integer, v: &integer) {
+    v[1-1] = x + 1
+    v[2-1] = x + 2
+    reditus;
+}
+
+munus main(){
+    sm(0,v)
+    imprimo(v[0], " ")
+    imprimo(v[1], "\n")
+}

@@ -87,6 +87,7 @@ def p_param(p):
     """
     param : ID ':' type
     | ID ':' Ptype
+    | ID ':' Vtype
     """
     p[0] = Param(name=p[1], type=p[3])
 
@@ -259,27 +260,48 @@ def p_declaration_assignment(p):
     declaration_assignment : ID ':' type ASSIGN expression
     | ID ':' Ptype ASSIGN expression
     | ID ':' Vtype ndim ASSIGN '[' arrayitems ']'
-    | ID ':' Vtype ASSIGN '[' arrayitems ']'
-    | ID ':' Vtype ASSIGN '[' INTEGER RETI INTEGER ']'
+    | ID ':' Vtype ASSIGN '[' array_init ']'
     """
     if len(p) == 6:
         p[0] = Decl(name=p[1], type=p[3], value=p[5])
     elif len(p) == 9:
         p[0] = Decl(name=p[1], type=f"{p[3]}{p[4]}", value=ArrayLiteral(items=p[7]))
     elif len(p) == 8:
-        p[0] = Decl(name=p[1], type=p[3], value=ArrayLiteral(items=p[6]))
-    elif len(p) == 10:
-        p[0] = Decl(name=p[1], type=p[3], value=ArrayRange(start=int(p[6]), end=int(p[8])))
+        if isinstance(p[6], ArrayRange):
+            p[0] = Decl(name=p[1], type=p[3], value=p[6])
+        else:
+            p[0] = Decl(name=p[1], type=p[3], value=ArrayLiteral(items=p[6]))
+
+def p_array_init(p):
+    """
+    array_init : arrayitems
+               | array_range
+    """
+    p[0] = p[1]
+
+def p_array_range(p):
+    """
+    array_range : expression RETI expression
+    """
+    p[0] = ArrayRange(start=p[1], end=p[3])
 
 def p_array_items(p):
     """
     arrayitems : arrayitems ',' expression
+    | arrayitems ',' array_literal
     | expression
+    | array_literal
     """
     if len(p) == 4:
         p[0] = p[1] + [p[3]]
     else:
         p[0] = [p[1]]
+
+def p_array_literal(p):
+    """
+    array_literal : '[' arrayitems ']'
+    """
+    p[0] = ArrayLiteral(items=p[2])
 
 def p_declaration(p):
     """
@@ -357,6 +379,8 @@ def p_type(p):
     type : TYPE_INT
     | TYPE_STRING
     | TYPE_FLOAT
+    | Vtype
+    | Ptype
     """
     p[0] = p[1]
 

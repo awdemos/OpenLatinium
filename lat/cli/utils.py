@@ -4,6 +4,7 @@ from typing import Tuple
 import os
 import subprocess  # nosec: B404 - subprocess used safely with shell=False
 import shlex
+import sys
 
 from lat.utils.colors import COLOR_BLUE, COLOR_RED, COLOR_YELLOW, RESET_COLOR
 from lat.vm_interpreter import run_bytecode
@@ -51,6 +52,38 @@ def echo_cmd(cmd: str, verbose: bool = False) -> Tuple[int, str]:
 
 def run_vms_py(output_file: str, input_data: str = '', verbose: bool = False) -> Tuple[int, str]:
     """Run a compiled .vms file through the VM interpreter."""
+    if not input_data and not sys.stdin.isatty():
+        input_data = sys.stdin.read()
+    
+    c_vm_path = '/tmp/vms/vms/vms'
+    if os.path.exists(c_vm_path):
+        if verbose:
+            print(f"{COLOR_BLUE}[CMD]{RESET_COLOR} {c_vm_path} {output_file}")
+        try:
+            if sys.stdin.isatty():
+                result = subprocess.run(
+                    [c_vm_path, output_file],
+                    shell=False,
+                    timeout=300,
+                )
+                return result.returncode, ""
+            else:
+                result = subprocess.run(
+                    [c_vm_path, output_file],
+                    input=input_data,
+                    shell=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if result.returncode == 0:
+                    return 0, result.stdout
+            if verbose:
+                print(f"{COLOR_YELLOW}[WARN]{RESET_COLOR} C VM failed: {result.stderr.strip() if hasattr(result, 'stderr') else 'unknown'}")
+        except Exception as e:
+            if verbose:
+                print(f"{COLOR_YELLOW}[WARN]{RESET_COLOR} C VM error: {e}")
+    
     if verbose:
         print(f"{COLOR_BLUE}[CMD]{RESET_COLOR} python vm {output_file}")
     try:

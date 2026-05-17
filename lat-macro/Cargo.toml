@@ -1,0 +1,13 @@
+[package]
+name = "lat-macro"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+lat-core = { path = "../lat-core" }
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }

@@ -1,0 +1,10 @@
+// Test: Wrong number of arguments
+// Expected error: Function 'foo' expects 1 arguments, got 2
+
+munus foo(x: integer) {
+    reditus
+}
+
+munus main() {
+    foo(1, 2)
+}

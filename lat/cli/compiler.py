@@ -16,24 +16,44 @@ compilation pipeline with optional optimization.
 """
 
 import os
+from typing import List
 
 from lat.cli.utils import info_cmd, run_vms_py
 from lat.cli.args import error
 from lat.utils.colors import COLOR_RED, COLOR_YELLOW, RESET_COLOR
+from lat.semantic.analyzer import SemanticError
+
+
+def _format_diagnostic(e: SemanticError, kind: str) -> str:
+    prefix = f"{COLOR_RED}[{kind}]{RESET_COLOR}" if kind == "SEMANTIC ERROR" else f"{COLOR_YELLOW}[{kind}]{RESET_COLOR}"
+    if e.line > 0:
+        return f"{prefix} Line {e.line}: {e.message}"
+    return f"{prefix} {e.message}"
+
+
+def _report_diagnostics(errors: List[SemanticError], warnings: List[SemanticError]) -> bool:
+    has_errors = len(errors) > 0
+    for e in errors:
+        print(_format_diagnostic(e, "SEMANTIC ERROR"))
+    for w in warnings:
+        print(_format_diagnostic(w, "WARNING"))
+    if has_errors or warnings:
+        print(f"\n{COLOR_RED}{len(errors)} error(s){RESET_COLOR}, {COLOR_YELLOW}{len(warnings)} warning(s){RESET_COLOR}")
+    return has_errors
 
 
 def _compile_rd(content: str, opt_args: OptArgs) -> str:
     """Compile using the RD parser path."""
-    from lat.parsing.rd_parser import parse_text
+    from lat.parsing.rd_parser import parse_text, ParseError
     from lat.semantic.analyzer import analyze_program
-    program = parse_text(content)
-    success, errors, warnings = analyze_program(program)
-    if not success:
-        for e in errors:
-            print(f"{COLOR_RED}[SEMANTIC ERROR]{RESET_COLOR} {e.message}")
+    try:
+        program = parse_text(content)
+    except ParseError as e:
+        print(f"{COLOR_RED}[PARSE ERROR]{RESET_COLOR} {e}")
         raise SystemExit(1)
-    for w in warnings:
-        print(f"{COLOR_YELLOW}[WARNING]{RESET_COLOR} {w.message}")
+    success, errors, warnings = analyze_program(program)
+    if _report_diagnostics(errors, warnings):
+        raise SystemExit(1)
     if opt_args.get("--ir"):
         from lat.ir.generator import IRGenerator
         from lat.codegen.from_ir import IRCodeGenerator
@@ -56,12 +76,8 @@ def _compile_ast(content: str, opt_args: OptArgs) -> str:
     from lat.semantic.analyzer import analyze_program
     program = ast_parse(content)
     success, errors, warnings = analyze_program(program)
-    if not success:
-        for e in errors:
-            print(f"{COLOR_RED}[SEMANTIC ERROR]{RESET_COLOR} {e.message}")
+    if _report_diagnostics(errors, warnings):
         raise SystemExit(1)
-    for w in warnings:
-        print(f"{COLOR_YELLOW}[WARNING]{RESET_COLOR} {w.message}")
     if opt_args.get("--ir"):
         from lat.ir.generator import IRGenerator
         from lat.codegen.from_ir import IRCodeGenerator
@@ -79,8 +95,13 @@ def _compile_ast(content: str, opt_args: OptArgs) -> str:
 
 
 def _compile_legacy(content: str, opt_args: OptArgs) -> str:
-    """Compile using the legacy parser path."""
-    from lat.parsing._parser import parser as legacy_parser
+    """Compile using the legacy parser path.
+    
+    Note: The legacy path has known codegen issues with the Python VM interpreter.
+    It is kept for backward compatibility. The AST path is used by default.
+    """
+    from lat.parsing._parser import parser as legacy_parser, reset_parser
+    reset_parser()
     legacy_parser.input = content
     return legacy_parser.parse(content)
 
@@ -102,10 +123,11 @@ def build_execute(req_args: ReqArgs, opt_args: OptArgs) -> None:
             raise SystemExit(2)
         if opt_args.get("--rd"):
             output = _compile_rd(content, opt_args)
-        elif opt_args.get("--ast") or opt_args.get("--ir"):
-            output = _compile_ast(content, opt_args)
-        else:
+        elif opt_args.get("--legacy"):
             output = _compile_legacy(content, opt_args)
+        else:
+            # Default to AST path for reliable codegen
+            output = _compile_ast(content, opt_args)
         if not opt_args.get("-o"):
             opt_args["-o"] = os.path.splitext(req_args["input"])[0] + ".vms"
         with open(opt_args["-o"], "w") as f:
@@ -122,20 +144,20 @@ def check_execute(req_args: ReqArgs, opt_args: OptArgs) -> None:
         if content.startswith("//SKIP"):
             raise SystemExit(2)
         if opt_args.get("--rd"):
-            from lat.parsing.rd_parser import parse_text
+            from lat.parsing.rd_parser import parse_text, ParseError
             from lat.semantic.analyzer import analyze_program
-            program = parse_text(content)
+            try:
+                program = parse_text(content)
+            except ParseError as e:
+                print(f"{COLOR_RED}[PARSE ERROR]{RESET_COLOR} {e}")
+                raise SystemExit(1)
         else:
             from lat.parsing.ast_parser import parse as ast_parse
             from lat.semantic.analyzer import analyze_program
             program = ast_parse(content)
         success, errors, warnings = analyze_program(program)
-        if not success:
-            for e in errors:
-                print(f"{COLOR_RED}[SEMANTIC ERROR]{RESET_COLOR} {e.message}")
+        if _report_diagnostics(errors, warnings):
             raise SystemExit(1)
-        for w in warnings:
-            print(f"{COLOR_YELLOW}[WARNING]{RESET_COLOR} {w.message}")
         info_cmd("Semantic check passed.", verbose=opt_args.get("-v", False))
 
 

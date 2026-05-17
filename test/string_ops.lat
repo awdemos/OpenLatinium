@@ -1,0 +1,39 @@
+// Test string operations
+
+munus main() {
+    a: filum = "hello"
+    b: filum = "world"
+    c: filum = a + b
+    imprimo(c)
+    imprimo("\n")
+
+    d: filum = "hello world"
+    e: filum = "o"
+    f: filum = d - e
+    imprimo(f)
+    imprimo("\n")
+
+    g: filum = "abc"
+    h: integer = 3
+    i: filum = g * h
+    imprimo(i)
+    imprimo("\n")
+
+    j: filum = "hello"
+    k: filum = "hello"
+    l: integer = j == k
+    imprimo(l)
+    imprimo("\n")
+
+    m: filum = "hello"
+    n: filum = "world"
+    o: integer = m == n
+    imprimo(o)
+    imprimo("\n")
+
+    p: filum = "hello"
+    q: filum = "world"
+    r: integer = p != q
+    imprimo(r)
+    imprimo("\n")
+}

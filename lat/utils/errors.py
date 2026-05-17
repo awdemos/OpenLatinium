@@ -40,9 +40,22 @@ def lex_error(p: Any, msg: str) -> None:
 
 def syntax_error(p: Any, msg: str) -> None:
     """
-    Report a syntax error.
+    Report a syntax error with source context.
     """
-    sys.stderr.write(f"{COLOR_RED}Syntax Error:{COLOR_YELLOW}{p.lineno}:{COLOR_GREEN}{find_column(p.lexer.lexdata, p)}:{RESET_COLOR} {msg}\n")
+    line_no = p.lineno
+    col = find_column(p.lexer.lexdata, p)
+    lines = p.lexer.lexdata.split('\n')
+    source_line = lines[line_no - 1] if line_no <= len(lines) else ""
+    
+    output = []
+    output.append(f"{COLOR_RED}Syntax Error:{COLOR_YELLOW}{line_no}:{COLOR_GREEN}{col}:{RESET_COLOR} {msg}")
+    if source_line:
+        output.append(f"   {COLOR_BLUE}|{RESET_COLOR}")
+        output.append(f"{COLOR_YELLOW}{line_no:3}{RESET_COLOR} {COLOR_BLUE}|{RESET_COLOR} {source_line}")
+        caret = " " * (col - 1) + "^"
+        output.append(f"   {COLOR_BLUE}|{RESET_COLOR} {COLOR_RED}{caret}{RESET_COLOR}")
+    
+    sys.stderr.write("\n".join(output) + "\n")
 
 
 def compiler_error(p: Any, n: int, msg: str) -> None:

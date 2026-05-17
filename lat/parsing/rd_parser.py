@@ -340,15 +340,14 @@ class Parser:
 
     def _parse_vec_init(self, name: str, type_str: str, is_const: bool) -> Decl:
         self.expect("LBRACKET")
-        if self.match("INTEGER") and self.peek(1).type == "RETI":
-            start = int(self.expect("INTEGER").value)
-            self.expect("RETI")
-            end = int(self.expect("INTEGER").value)
-            self.expect("RBRACKET")
-            return Decl(name=name, type=type_str, value=ArrayRange(start=start, end=end), is_const=is_const)
         items = []
         if not self.match("RBRACKET"):
-            items.append(self.parse_expr())
+            first_expr = self.parse_expr()
+            if self.consume("RETI"):
+                second_expr = self.parse_expr()
+                self.expect("RBRACKET")
+                return Decl(name=name, type=type_str, value=ArrayRange(start=first_expr, end=second_expr), is_const=is_const)
+            items.append(first_expr)
             while self.consume("COMMA"):
                 items.append(self.parse_expr())
         self.expect("RBRACKET")

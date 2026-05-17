@@ -105,16 +105,42 @@ Types:
 - `filum` — strings in double quotes
 - `boolean` — `verum` (true) or `falsum` (false)
 
-### Constants
+### String Operations
 
-Use `constans` for immutable variables:
+Strings support concatenation, subtraction, multiplication, and comparison:
 
 ```
 munus main() {
-    constans PI: float = 3.14159
-    constans MAX_SIZE: integer = 100
+    a: filum = "hello"
+    b: filum = "world"
     
-    // PI = 3.0  // Error: cannot assign to constant
+    // Concatenation
+    c: filum = a + b
+    imprimo(c, "\n")  // prints "helloworld"
+    
+    // Subtraction (remove characters)
+    d: filum = "hello world"
+    e: filum = "o"
+    f: filum = d - e
+    imprimo(f, "\n")  // prints "hell wrld"
+    
+    // Multiplication (repeat)
+    g: filum = "abc"
+    h: integer = 3
+    i: filum = g * h
+    imprimo(i, "\n")  // prints "abcabcabc"
+    
+    // Equality (content comparison)
+    j: filum = "hello"
+    k: filum = "hello"
+    si j == k {
+        imprimo("Equal!\n")
+    }
+    
+    // Inequality
+    si j != b {
+        imprimo("Not equal!\n")
+    }
 }
 ```
 
@@ -240,6 +266,15 @@ munus main() {
 }
 ```
 
+Multi-dimensional arrays:
+
+```
+munus main() {
+    matrix: vec<vec<integer>> = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    imprimo(matrix[1][2], "\n")  // prints 6
+}
+```
+
 ### Functions
 
 ```
@@ -273,6 +308,22 @@ munus main() {
 }
 ```
 
+Match with expressions:
+
+```
+munus main() {
+    score: integer = 85
+    
+    par score {
+        90 -> { imprimo("A\n") }
+        80 -> { imprimo("B\n") }
+        70 -> { imprimo("C\n") }
+        60 -> { imprimo("D\n") }
+        defectus -> { imprimo("F\n") }
+    }
+}
+```
+
 ### Pointers
 
 ```
@@ -283,6 +334,29 @@ munus main() {
     imprimo(p[0], "\n")  // prints 10
     p = p + 1
     imprimo(p[0], "\n")  // prints 20
+    p = p + 1
+    imprimo(p[0], "\n")  // prints 30
+}
+```
+
+Pointer arithmetic example:
+
+```
+munus sumWithPointer(arr: vec<integer>, n: integer) -> integer {
+    p: &integer = arr
+    total: integer = 0
+    i: integer
+    enim(i: integer = 0; i < n; i = i + 1) {
+        total = total + p[0]
+        p = p + 1
+    }
+    reditus total
+}
+
+munus main() {
+    nums: vec<integer> = [10, 20, 30, 40, 50]
+    result: integer = sumWithPointer(nums, 5)
+    imprimo("Sum: ", result, "\n")  // prints 150
 }
 ```
 
@@ -325,7 +399,6 @@ multi-line comment
 | `vec` | vector | Array type |
 | `verum` | true | Boolean literal |
 | `falsum` | false | Boolean literal |
-| `constans` | constant | Const declaration |
 | `et` | and | Logical AND |
 | `aut` | or | Logical OR |
 | `non` | not | Logical NOT |
@@ -334,13 +407,13 @@ multi-line comment
 
 | Operator | Description |
 |----------|-------------|
-| `+` | Addition, string concat |
-| `-` | Subtraction, negation |
-| `*` | Multiplication |
+| `+` | Addition, string concatenation |
+| `-` | Subtraction, string character removal, negation |
+| `*` | Multiplication, string repetition |
 | `/` | Division |
 | `%` | Modulo |
-| `==` | Equal |
-| `!=` | Not equal |
+| `==` | Equal (value comparison for strings) |
+| `!=` | Not equal (value comparison for strings) |
 | `<` | Less than |
 | `>` | Greater than |
 | `<=` | Less or equal |
@@ -359,7 +432,7 @@ Pointer types: `&integer`, `&float`, `&filum`
 
 Array types: `vec<integer>`, `vec<float>`, `vec<filum>`, `vec<boolean>`
 
-Multi-dimensional arrays: `vec<integer>[3][3]`
+Multi-dimensional arrays: `vec<vec<integer>> = [[1, 2, 3], [4, 5, 6]]`
 
 ### Type Compatibility
 
@@ -373,10 +446,12 @@ Multi-dimensional arrays: `vec<integer>[3][3]`
 ### Commands
 
 ```
-lat build <file> [options]    Compile .lat to .vms
-lat run <file> [options]      Compile and run
-lat test [options]            Run test suite
-lat examples [options]        Run example programs
+lat build <file> [options]       Compile .lat to .vms
+lat run <file> [options]         Compile and run
+lat test [options]               Run test suite
+lat semantic_test [options]      Run semantic error tests
+lat fmt <file> [options]         Format .lat file
+lat examples [options]           Run example programs
 ```
 
 ### Options
@@ -390,6 +465,28 @@ lat examples [options]        Run example programs
 | `--rd` | Use recursive descent parser |
 | `--opt` | Enable IR optimizations |
 | `--check` | Semantic analysis only |
+
+### Formatting
+
+Format a source file in place:
+
+```bash
+lat fmt program.lat
+```
+
+Format with output to a different file:
+
+```bash
+lat fmt program.lat -o formatted.lat
+```
+
+### Semantic Testing
+
+Run semantic error tests (tests that verify error detection):
+
+```bash
+lat semantic_test
+```
 
 ### Compilation Paths
 
@@ -441,13 +538,18 @@ lat examples
 ```
   OpenLatinum/
   lat/
-    cli.py              # CLI entry point
+    cli/                # CLI package
+      __init__.py       # CLI entry point and dispatch
+      args.py           # Argument parsing
+      compiler.py       # Compilation orchestration
+      runner.py         # Test runner, formatter runner
+      utils.py          # CLI utilities
     lexing/
       _lexer.py         # PLY-based lexer
     parsing/
       _parser.py        # Original PLY parser
       ast_parser.py     # AST-building PLY parser
-      rd_parser.py      # Recursive descent parser (new)
+      rd_parser.py      # Recursive descent parser
       tokenizer.py      # Hand-written tokenizer
     ast/
       nodes.py          # AST node classes
@@ -460,14 +562,20 @@ lat examples
       nodes.py          # IR node classes
       generator.py      # AST-to-IR generator
       optimizer.py      # IR optimizer
+    fmt/
+      formatter.py      # Code formatter (lat fmt)
     utils/
       errors.py         # Error utilities
   examples/             # Example programs
   test/                 # Test programs
+  tests/                # Additional tests
   apresentacao/         # Tutorial programs
+  docs/                 # Documentation
   Dockerfile
   README.md
+  HANDBOOK.md           # This file
   EVOLUTION_ANALYSIS.md # Architecture analysis
+  CONTEXT.md            # Development context and ADRs
 ```
 
 ### Compilation Pipeline
@@ -526,18 +634,26 @@ To add a new statement type:
 
 ### Testing
 
-Run the test suites:
+Run all tests:
 
 ```bash
-python test_ast.py    # AST path tests
-python ir_validate.py  # IR path tests
+lat test              # Run full test suite
+lat test -v           # Verbose output
+```
+
+Run specific test paths:
+
+```bash
+python test_ast.py      # AST path validation
+python ir_validate.py   # IR path validation
+lat semantic_test       # Semantic error detection tests
 ```
 
 Add a new test:
 
 1. Create `test/my_feature.lat`
 2. Create `test/my_feature.ans` with expected output
-3. Run `python test_ast.py` to verify
+3. Run `lat test` to verify
 
 ### Docker Development
 
@@ -667,25 +783,63 @@ munus main() {
 }
 ```
 
+### String Operations
+
+```
+munus main() {
+    // Concatenation
+    a: filum = "Hello, "
+    b: filum = "World!"
+    imprimo(a + b, "\n")
+    
+    // Remove characters
+    text: filum = "hello world"
+    vowels: filum = "aeiou"
+    imprimo(text - vowels, "\n")  // "hll wrld"
+    
+    // Repeat string
+    pattern: filum = "*-"
+    imprimo(pattern * 5, "\n")  // "*-*-*-*-*-"
+    
+    // Compare content
+    s1: filum = "test"
+    s2: filum = "test"
+    si s1 == s2 {
+        imprimo("Same content!\n")
+    }
+}
+```
+
+### Array Ranges
+
+```
+munus main() {
+    // Range initialization [1 ... 10]
+    nums: vec<integer> = [1 ... 10]
+    imprimo(nums[0], " ")   // 1
+    imprimo(nums[9], "\n")  // 10
+    
+    // Range with different bounds
+    squares: vec<integer> = [5 ... 15]
+    enim(i: integer = 0; i < 11; i = i + 1) {
+        imprimo(squares[i], " ")
+    }
+    imprimo("\n")
+}
+```
+
 ### Matrix Operations
 
 ```
-munus printMatrix(m: vec<integer>[3][3]) {
+munus main() {
+    m: vec<vec<integer>> = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    
     enim(i: integer = 0; i < 3; i = i + 1) {
         enim(j: integer = 0; j < 3; j = j + 1) {
             imprimo(m[i][j], " ")
         }
         imprimo("\n")
     }
-}
-
-munus main() {
-    m: vec<integer>[3][3] = [
-        1, 2, 3,
-        4, 5, 6,
-        7, 8, 9
-    ]
-    printMatrix(m)
 }
 ```
 
@@ -724,7 +878,6 @@ See `examples/qsort.lat` for a complete implementation.
 | boolean | boolean |
 | verum | true |
 | falsum | false |
-| constans | constant |
 | vec | array/vector |
 | et | and |
 | aut | or |

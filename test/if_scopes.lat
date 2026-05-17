@@ -1,8 +1,9 @@
 munus main() {
     x: integer = 2
+    y: integer = 0
 
     si x == 2 {
-        y: integer = x + 1
+        y = x + 1
     } aliter {
         x: integer = x + 1
     }

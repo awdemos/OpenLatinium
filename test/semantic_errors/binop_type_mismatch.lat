@@ -1,0 +1,8 @@
+// Test: Type mismatch in binary operation
+// Expected error: Type mismatch in binary operation
+
+munus main() {
+    x: integer = 1
+    y: filum = "hello"
+    z: integer = x + y
+}

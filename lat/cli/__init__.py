@@ -6,7 +6,7 @@ from typing import Optional
 from lat.utils.errors import CompilationError
 from lat.cli.args import prepare_cmd_args, OptArgs, ReqArgs
 from lat.cli.compiler import build_execute, check_execute, run_execute
-from lat.cli.runner import test_execute, euler_execute, examples_execute
+from lat.cli.runner import test_execute, euler_execute, examples_execute, semantic_test_execute, fmt_execute
 from lat.cli.utils import echo_cmd, run_vms_py, warn_cmd, info_cmd
 
 
@@ -21,10 +21,14 @@ def execute(opt_args: OptArgs, req_args: ReqArgs) -> None:
         build_execute(req_args, opt_args)
     elif req_args.get("test"):
         test_execute(req_args, opt_args)
+    elif req_args.get("semantic_test"):
+        semantic_test_execute(req_args, opt_args)
     elif req_args.get("euler"):
         euler_execute(req_args, opt_args)
     elif req_args.get("examples"):
         examples_execute(req_args, opt_args)
+    elif req_args.get("fmt"):
+        fmt_execute(req_args, opt_args)
 
 
 def cli() -> None:

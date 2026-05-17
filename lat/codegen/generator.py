@@ -90,8 +90,10 @@ class CodeGenerator:
         
 
         main_code = "start\n"
+        main_code += "PUSHI 0\n"
         main_code += "PUSHA main\n"
         main_code += "CALL\n"
+        main_code += "POP 1\n"
         main_code += "stop\n"
         
         return globals_code + main_code + funcs_code
@@ -101,7 +103,7 @@ class CodeGenerator:
         if isinstance(stmt, nodes.Decl):
             if stmt.type.startswith("vec<"):
                 if stmt.value and isinstance(stmt.value, nodes.ArrayRange):
-                    count = stmt.value.end - stmt.value.start
+                    count = stmt.value.end.value - stmt.value.start.value + 1
                 elif stmt.value and isinstance(stmt.value, nodes.ArrayLiteral):
                     count = len(stmt.value.items)
                 else:
@@ -232,7 +234,7 @@ class CodeGenerator:
         if decl.type.startswith("vec<"):
 
             if decl.value and isinstance(decl.value, nodes.ArrayRange):
-                size = decl.value.end - decl.value.start + 1
+                size = decl.value.end.value - decl.value.start.value + 1
                 array_shape = [size]
             elif decl.value and isinstance(decl.value, nodes.ArrayLiteral):
                 size = len(decl.value.items)
@@ -255,15 +257,20 @@ class CodeGenerator:
             if decl.value and isinstance(decl.value, nodes.ArrayLiteral):
                 for i, item in enumerate(decl.value.items):
                     push_op = "PUSHGP" if is_global else "PUSHFP"
-                    code += f"{push_op}\nPUSHI {pos}\nPUSHI {i}\nPADD\n"
+                    code += f"{push_op}\nPUSHI {pos}\nPADD\nPUSHI {i}\nPADD\n"
                     code += self.gen_expr(item)
                     self.pop_type()
                     code += "STORE 0\n"
             elif decl.value and isinstance(decl.value, nodes.ArrayRange):
                 for i in range(size):
                     push_op = "PUSHGP" if is_global else "PUSHFP"
-                    val = decl.value.start + i
-                    code += f"{push_op}\nPUSHI {pos}\nPUSHI {i}\nPADD\nPUSHI {val}\nSTORE 0\n"
+                    val = decl.value.start.value + i
+                    code += f"{push_op}\nPUSHI {pos}\nPADD\nPUSHI {i}\nPADD\nPUSHI {val}\nSTORE 0\n"
+            else:
+                # Initialize all elements to 0
+                for i in range(size):
+                    push_op = "PUSHGP" if is_global else "PUSHFP"
+                    code += f"{push_op}\nPUSHI {pos}\nPADD\nPUSHI {i}\nPADD\nPUSHI 0\nSTORE 0\n"
             
             return code
         
@@ -308,7 +315,7 @@ class CodeGenerator:
                 elif decl.type == "float":
                     code += "PUSHF 0.0\n"
                 elif decl.type == "filum":
-                    code += "PUSHS ''\n"
+                    code += "PUSHS \"\"\n"
             
             code += self.gen_store(var)
             return code
@@ -335,6 +342,7 @@ class CodeGenerator:
                 compiler_note("Called from CodeGenerator.gen_assignment")
                 raise CompilationError(msg)
             code += self.gen_store(var)
+            self.pop_type()
         elif isinstance(assign.target, nodes.ArrayIndex):
             var = self.current_scope.get(assign.target.name)
             if var is None:
@@ -350,11 +358,14 @@ class CodeGenerator:
                 code = f"{push_op}\nPUSHI {var.stack_pos}\nPADD\n"
             for idx in assign.target.indices:
                 code += self.gen_expr(idx)
+                self.pop_type()
                 code += "PADD\n"
             code += self.gen_expr(assign.value)
+            self.pop_type()
             code += "STORE 0\n"
         else:
             code = self.gen_expr(assign.value)
+            self.pop_type()
         
         return code
     
@@ -591,6 +602,10 @@ class CodeGenerator:
         if func.return_type:
             code += "PUSHI -69\n"
         
+        needs_dummy = not func.return_type and not func.params
+        if needs_dummy:
+            code += "PUSHI 0\n"
+        
         for arg in call.args:
             code += self.gen_expr(arg)
         
@@ -599,6 +614,12 @@ class CodeGenerator:
         
         if func.params:
             code += f"POP {len(func.params)}\n"
+        
+        if needs_dummy:
+            code += "POP 1\n"
+        
+        for _ in call.args:
+            self.pop_type()
         
         if func.return_type:
             self.push_type(func.return_type)
@@ -674,7 +695,7 @@ class CodeGenerator:
             self.push_type(left_type)
             count = self.label_counter
             self.label_counter += 1
-            code += f"DUP 1\nJZ OR{count}RIGHT\nPOP 1\nJUMP OR{count}END\nOR{count}RIGHT:\nPOP 1\n"
+            code += f"DUP 1\nJZ OR{count}RIGHT\nJUMP OR{count}END\nOR{count}RIGHT:\nPOP 1\n"
             code += self.gen_expr(expr.right)
             self.pop_type()
             self.push_type("integer")
@@ -715,6 +736,9 @@ class CodeGenerator:
             elif left_type == right_type == "float":
                 self.push_type("float")
                 code += "FSUB\n"
+            elif left_type == right_type == "filum":
+                self.push_type("filum")
+                code += "SSUB\n"
             elif is_ptr(left_type) and right_type == "integer":
                 self.push_type(ptr_type(left_type))
                 code += "PUSHI -1\nMUL\nPADD\n"
@@ -725,6 +749,12 @@ class CodeGenerator:
             elif left_type == right_type == "float":
                 self.push_type("float")
                 code += "FMUL\n"
+            elif left_type == "filum" and right_type == "integer":
+                self.push_type("filum")
+                code += "SMUL\n"
+            elif left_type == "integer" and right_type == "filum":
+                self.push_type("filum")
+                code += "SWAP\nSMUL\n"
         elif op == '/':
             if left_type == right_type == "integer":
                 self.push_type("integer")
@@ -737,14 +767,20 @@ class CodeGenerator:
                 self.push_type("integer")
                 code += "MOD\n"
         elif op == 'EQ':
-            if left_type == right_type and left_type != "filum":
+            if left_type == right_type and left_type == "filum":
+                self.push_type("integer")
+                code += "SEQ\n"
+            elif left_type == right_type and left_type != "filum":
                 self.push_type("integer")
                 code += "EQUAL\n"
             elif is_ptr(left_type) and is_ptr(right_type):
                 self.push_type("integer")
                 code += "EQUAL\n"
         elif op == 'NEQ':
-            if left_type == right_type and left_type != "filum":
+            if left_type == right_type and left_type == "filum":
+                self.push_type("integer")
+                code += "SEQ\nNOT\n"
+            elif left_type == right_type and left_type != "filum":
                 self.push_type("integer")
                 code += "EQUAL\nNOT\n"
             elif is_ptr(left_type) and is_ptr(right_type):
@@ -828,6 +864,7 @@ class CodeGenerator:
         
         for idx in expr.indices:
             code += self.gen_expr(idx)
+            self.pop_type()
             code += "PADD\n"
         
         if var.type.startswith("vec<"):

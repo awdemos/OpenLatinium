@@ -1,0 +1,3 @@
+# Python VM Interpreter Alongside C VM
+
+OpenLatinum includes a pure Python bytecode interpreter (`lat/vm_interpreter.py`) that can execute `.vms` files independently of the C-based EWVM. This eliminates the C build dependency for development and testing, making the compiler immediately runnable after `pip install`. The trade-off is that the Python interpreter may have subtle behavioral differences from the C VM (it uses a step limit and different stack semantics), and it adds a second execution backend that must be kept in sync. The C VM remains the canonical execution target for production use.

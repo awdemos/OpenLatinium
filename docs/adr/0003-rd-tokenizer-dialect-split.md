@@ -1,0 +1,3 @@
+# RD Tokenizer with Extended Keyword Support
+
+The recursive descent parser (`--rd` path) uses a separate tokenizer (`lat/parsing/tokenizer.py`) that recognizes keywords not present in the main PLY lexer: `boolean`, `verum`, `falsum`, and `constans`. This means programs using these features only compile with the RD path, creating a language dialect split. The decision to extend the RD tokenizer was likely driven by experimental language feature development, but it has the consequence that the "same" language behaves differently depending on which compilation path is selected. Unifying the lexers would require adding these keywords to the main PLY lexer and ensuring all three compilation paths support them.

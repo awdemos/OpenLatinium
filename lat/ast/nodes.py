@@ -83,8 +83,8 @@ class ArrayLiteral:
 
 @dataclass
 class ArrayRange:
-    start: int
-    end: int
+    start: 'Expr'
+    end: 'Expr'
 
 
 @dataclass

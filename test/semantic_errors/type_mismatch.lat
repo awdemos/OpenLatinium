@@ -1,0 +1,6 @@
+// Test: Type mismatch in assignment
+// Expected error: Cannot assign 'float' to 'integer'
+
+munus main() {
+    x: integer = 3.14
+}

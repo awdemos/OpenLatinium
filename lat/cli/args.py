@@ -11,7 +11,7 @@ from lat.cli.utils import warn_cmd
 OptArgs = Dict[str, Union[str, bool]]
 ReqArgs = Dict[str, Union[str, bool]]
 
-POSSIBLE_EXEC_MODES = ["run", "build", "test", "euler", "examples"]
+POSSIBLE_EXEC_MODES = ["run", "build", "test", "semantic_test", "euler", "examples", "fmt"]
 POSSIBLE_OPT_ARGS = [
     "-o", "--output", "-v", "--verbose", "-rec", "--record",
     "-clc", "--clean-up", "--ast", "--check", "--ir", "--opt", "--rd"
@@ -32,6 +32,7 @@ def print_help() -> None:
     print(f"  {COLOR_GREEN}euler{RESET_COLOR}      Check the solutions of the Euler problems.")
     print(f"  {COLOR_GREEN}test{RESET_COLOR}       Compile and run the test programs. Compare the outputs with the expected outputs.")
     print(f"  {COLOR_GREEN}examples{RESET_COLOR}   Compile and run the example programs. Compare the outputs with the expected outputs.")
+    print(f"  {COLOR_GREEN}fmt{RESET_COLOR}        Format a .lat source file.")
     print()
     print(f"{COLOR_BLUE}OPTIONS{RESET_COLOR}:")
     print(f"  {COLOR_GREEN}-h{RESET_COLOR}, {COLOR_GREEN}--help{RESET_COLOR}" + " " * 10 + "Show this help message and exit.")
@@ -59,12 +60,12 @@ def prepare_cmd_args() -> Tuple[Optional[OptArgs], Optional[ReqArgs]]:
     # Handle Optional Arguments
     input_file: Optional[str] = None
     for arg in sys.argv[1:]:
+        if "-o" in sys.argv and sys.argv.index("-o") == sys.argv.index(arg) - 1:
+            continue
         if arg.endswith(".lat"):
             input_file = arg
             continue
         if arg not in RECOGNIZED_ARGS:
-            if "-o" in sys.argv and sys.argv.index("-o") == sys.argv.index(arg) - 1:
-                continue
             error(f"Unrecognized argument: {arg}. Use -h or --help to see the help message.")
 
     output_file = sys.argv[sys.argv.index("-o") + 1] if "-o" in sys.argv else None
@@ -96,12 +97,14 @@ def prepare_cmd_args() -> Tuple[Optional[OptArgs], Optional[ReqArgs]]:
     run = "run" in sys.argv
     build = "build" in sys.argv
     test = "test" in sys.argv
+    semantic_test = "semantic_test" in sys.argv
     euler = "euler" in sys.argv
     examples = "examples" in sys.argv
-    modes = [run, build, test, euler, examples]
+    fmt = "fmt" in sys.argv
+    modes = [run, build, test, semantic_test, euler, examples, fmt]
     active_modes = [m for m in modes if m]
     if len(active_modes) == 0:
-        error("No execution mode specified. (run, build, test, euler, examples)")
+        error("No execution mode specified. (run, build, test, semantic_test, euler, examples, fmt)")
     if len(active_modes) > 1:
         error("Multiple execution modes specified.")
 
@@ -110,8 +113,10 @@ def prepare_cmd_args() -> Tuple[Optional[OptArgs], Optional[ReqArgs]]:
         "run": run,
         "build": build,
         "test": test,
+        "semantic_test": semantic_test,
         "euler": euler,
         "examples": examples,
+        "fmt": fmt,
     }
 
     return opt_args, req_args

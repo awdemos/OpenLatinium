@@ -71,8 +71,8 @@ Key modules:
 - Types: `integer`, `float`, `filum` (string), `&T` (pointer), `vec<T>` (array)
 - Declaration syntax: `name: type = value` (ID-first, not type-first)
 - Arrays: `vec<integer>[10]` or `vec<integer> = [1, 2, 3]` or `vec<integer> = [1 ... 10]`
-- Control flow: `si` (if), `aliter` (else), `dum` (while), `pro` (for), `fac` (do-while), `collige` (match), `finis` (break), `perge` (continue)
-- Functions: `fun name(param: type) -> return_type { ... }`
+- Control flow: `si` (if), `aliter` (else), `dum` (while), `enim` (for), `facio` (do-while), `par` (match), `confractus` (break), `perge` (continue)
+- Functions: `munus name(param: type) -> return_type { ... }`
 - Logical: `et` (&&), `aut` (||), `non` (!)
 
 ## Common Issues

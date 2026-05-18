@@ -2,18 +2,27 @@
 
 ## Overview
 
-OpenLatinum is a statically typed programming language with Latin-inspired syntax. It compiles `.lat` source files to stack-based bytecode. The compiler is written in Python and supports multiple compilation paths for teaching and experimentation.
+OpenLatinum is a statically typed programming language with Latin-inspired syntax. It compiles `.lat` source files to stack-based bytecode. The compiler is available in both **Python** and **Rust** and supports multiple compilation paths for teaching and experimentation.
 
 This project is a community-driven evolution of the original OpenLatinum compiler (University of Minho, 2022).
 
 ## Installation
 
-### Local Install
+### Local Install (Python)
 
 ```bash
-git clone https://github.com/awdemos/OpenLatinum.git
+git clone https://github.com/awdemos/OpenLatinium.git
 cd OpenLatinum
 pip install -e .
+```
+
+### Local Install (Rust)
+
+```bash
+git clone https://github.com/awdemos/OpenLatinium.git
+cd OpenLatinum
+cargo build --workspace
+cargo test --workspace
 ```
 
 ### Docker (Recommended)
@@ -189,6 +198,18 @@ python -m pytest tests/test_semantic.py -v
 python -m pytest tests/test_codegen.py -v
 ```
 
+### Rust Tests
+
+Run the Rust workspace tests:
+```bash
+cargo test --workspace
+```
+
+Run with output:
+```bash
+cargo test --workspace -- --nocapture
+```
+
 ### Integration Tests
 
 Run the full test suite against `.lat` programs:
@@ -223,11 +244,22 @@ The Python interpreter is transparent to the user - the same `.vms` bytecode fil
 
 ## Architecture
 
-The compiler has **three compilation paths**:
+The compiler has **three Python compilation paths** and a **Rust compiler frontend**:
+
+### Python Paths
 
 1. **Original**: `lat/lexing/_lexer.py` → `lat/parsing/_parser.py` → `lat/semantics/*` → bytecode (single-pass, syntax-directed)
 2. **AST path** (`--ast`): `lat/parsing/ast_parser.py` → `lat/semantic/analyzer.py` → `lat/codegen/generator.py` → bytecode
 3. **IR path** (`--ir`): AST → `lat/ir/generator.py` → `lat/ir/nodes.py` → `lat/codegen/from_ir.py` → bytecode
+
+### Rust Compiler Frontend
+
+A Rust implementation of the compiler frontend (lexer → parser → AST → semantic analysis) is available in the `lat-core` crate. It can be used as a library or via the `lat!` procedural macro for embedding OpenLatinum code in Rust programs.
+
+**Workspace crates:**
+- `lat-core` — Lexer, parser, AST, and semantic analyzer (Rust)
+- `lat-macro` — Procedural macros (the `lat!` macro)
+- `lat` — Integration tests and CLI bindings
 
 Key modules:
 - `lat/cli.py` — Entry point, argument parsing, test runner
@@ -237,6 +269,7 @@ Key modules:
 - `lat/vm_interpreter.py` — Python bytecode interpreter for executing `.vms` files
 - `lat/ir/generator.py` — AST-to-IR converter (three-address code)
 - `lat/codegen/from_ir.py` — IR-to-bytecode generator
+- `lat-core/src/` — Rust lexer, parser, AST, and semantic analysis
 
 ## Language Keywords
 
